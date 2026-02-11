@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { BookOpen, CheckSquare, Heart, Sparkles, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { useCollection } from "@/firebase";
+import { useCollection, useMemoFirebase } from "@/firebase";
 import { collection, query, limit, orderBy } from "firebase/firestore";
 import { useFirestore } from "@/firebase/provider";
 import { useUser } from "@/firebase/auth/use-user";
@@ -16,18 +16,23 @@ export default function DashboardPage() {
   const db = useFirestore();
   const { user } = useUser();
   
-  // Simulated paths - in a real app, these would use user.uid
-  const reflectionsQuery = query(collection(db, "reflections"), limit(3), orderBy("date", "desc"));
-  const { data: reflections } = useCollection(reflectionsQuery);
+  // Use the specific path for SO Program entries for the dashboard preview
+  const recentLogsQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(
+      collection(db, "users", user.uid, "so_entries"), 
+      orderBy("date", "desc"), 
+      limit(5)
+    );
+  }, [db, user]);
   
-  const assignmentsQuery = query(collection(db, "assignments"), limit(5));
-  const { data: assignments } = useCollection(assignmentsQuery);
+  const { data: logs } = useCollection(recentLogsQuery);
 
   const stats = [
-    { name: "Mood Score", value: "8/10", icon: Heart, color: "bg-red-100 text-red-600" },
-    { name: "Assignments", value: assignments?.filter(a => a.status === 'pending').length || "0", icon: CheckSquare, color: "bg-blue-100 text-blue-600" },
-    { name: "Journal Streak", value: "5 Days", icon: BookOpen, color: "bg-purple-100 text-purple-600" },
-    { name: "Insights", value: "4 New", icon: Sparkles, color: "bg-amber-100 text-amber-600" },
+    { name: "Total Sessions", value: logs?.length || "0", icon: BookOpen, color: "bg-purple-100 text-purple-600" },
+    { name: "Last Session", value: logs?.[0]?.date || "N/A", icon: Heart, color: "bg-red-100 text-red-600" },
+    { name: "Growth Insights", value: logs?.filter(l => !!l.aiInsight).length || "0", icon: Sparkles, color: "bg-amber-100 text-amber-600" },
+    { name: "WK Progress", value: logs?.[0]?.week || "0", icon: CheckSquare, color: "bg-blue-100 text-blue-600" },
   ];
 
   return (
@@ -68,25 +73,25 @@ export default function DashboardPage() {
           <section className="grid gap-4 md:grid-cols-2">
             <Card className="border-none shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Recent Reflections</CardTitle>
-                <CardDescription className="text-xs">Your latest journal entries and mood logs.</CardDescription>
+                <CardTitle className="text-base">Recent SO Ledger Entries</CardTitle>
+                <CardDescription className="text-xs">Your latest program sessions and attendance.</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {reflections?.map((reflection: any) => (
-                    <div key={reflection.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  {logs?.map((log: any) => (
+                    <div key={log.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
                       <div className="space-y-0.5">
-                        <p className="text-sm font-bold truncate max-w-[200px]">{reflection.notes}</p>
-                        <p className="text-[10px] text-muted-foreground">{reflection.date}</p>
+                        <p className="text-sm font-bold truncate max-w-[200px]">WK {log.week}: {log.presentationTopic || 'No topic recorded'}</p>
+                        <p className="text-[10px] text-muted-foreground">{log.date}</p>
                       </div>
                       <Button variant="ghost" size="sm" className="h-8 text-[10px]" asChild>
                         <Link href="/sessions">View</Link>
                       </Button>
                     </div>
                   ))}
-                  {(!reflections || reflections.length === 0) && (
+                  {(!logs || logs.length === 0) && (
                     <div className="text-center py-8 text-muted-foreground text-xs">
-                      No logs found. Start your first reflection.
+                      No logs found. Start your first session entry or import your data.
                     </div>
                   )}
                 </div>
@@ -95,23 +100,23 @@ export default function DashboardPage() {
 
             <Card className="border-none shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Open Assignments</CardTitle>
-                <CardDescription className="text-xs">Tasks to focus on this week.</CardDescription>
+                <CardTitle className="text-base">Financial Status</CardTitle>
+                <CardDescription className="text-xs">Recent payments and check tracking.</CardDescription>
               </CardHeader>
               <CardContent>
                  <div className="space-y-3">
-                  {assignments?.filter(a => a.status === 'pending').map((assignment: any) => (
-                    <div key={assignment.id} className="flex items-center gap-3 p-3 rounded-xl bg-blue-50/50 border border-blue-100">
-                      <div className="h-2 w-2 rounded-full bg-blue-500" />
+                  {logs?.slice(0, 5).map((log: any) => (
+                    <div key={log.id} className="flex items-center gap-3 p-3 rounded-xl bg-blue-50/50 border border-blue-100">
+                      <div className={`h-2 w-2 rounded-full ${log.paid ? 'bg-emerald-500' : 'bg-red-500'}`} />
                       <div className="flex-1">
-                        <p className="text-sm font-bold">{assignment.title}</p>
-                        <p className="text-[10px] text-muted-foreground">Due: {assignment.dueDate}</p>
+                        <p className="text-sm font-bold">${log.cost?.toFixed(2)} - {log.paid ? 'Paid' : 'Unpaid'}</p>
+                        <p className="text-[10px] text-muted-foreground">Check: {log.checkNumber || 'N/A'}</p>
                       </div>
                     </div>
                   ))}
-                  {(!assignments || assignments.length === 0) && (
+                  {(!logs || logs.length === 0) && (
                     <div className="text-center py-8 text-muted-foreground text-xs">
-                      All caught up! No pending assignments.
+                      No financial data recorded yet.
                     </div>
                   )}
                 </div>

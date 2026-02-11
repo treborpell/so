@@ -1,177 +1,33 @@
+
 {
   "entities": {
-    "Patient": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Patient",
+    "SOEntry": {
+      "title": "SO Program Entry",
+      "description": "A single ledger entry for the SO Program tracking session progress and financials.",
       "type": "object",
-      "description": "Represents a patient in the mental health treatment group therapy.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Patient entity."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the patient."
-        },
-        "email": {
-          "type": "string",
-          "description": "The email address of the patient.",
-          "format": "email"
-        },
-        "dateOfBirth": {
-          "type": "string",
-          "description": "The date of birth of the patient.",
-          "format": "date"
-        }
+        "week": { "type": "number", "description": "The week number of the program." },
+        "sessionNumber": { "type": "string", "description": "The session identifier (can be a number or 'x' for excused)." },
+        "date": { "type": "string", "format": "date", "description": "The date of the session." },
+        "cost": { "type": "number", "description": "The cost of the session." },
+        "paid": { "type": "boolean", "description": "Whether the session has been paid for." },
+        "checkNumber": { "type": "string", "description": "The check number used for payment, if applicable." },
+        "ableToPresent": { "type": "boolean", "description": "Whether the user was able to present during the session." },
+        "presentationTopic": { "type": "string", "description": "The topic presented during the session." },
+        "notes": { "type": "string", "description": "Clinical or personal notes from the session." },
+        "aiInsight": { "type": "string", "description": "AI-generated clinical synthesis of the entry." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the entry was created." }
       },
-      "required": [
-        "id",
-        "name"
-      ]
-    },
-    "Session": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Session",
-      "type": "object",
-      "description": "Represents a therapy session.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Session entity."
-        },
-        "patientId": {
-          "type": "string",
-          "description": "Reference to Patient. (Relationship: Patient 1:N Session)"
-        },
-        "date": {
-          "type": "string",
-          "description": "The date of the therapy session.",
-          "format": "date"
-        },
-        "notes": {
-          "type": "string",
-          "description": "Notes taken during the session."
-        },
-        "summary": {
-          "type": "string",
-          "description": "AI-generated summary of the session."
-        }
-      },
-      "required": [
-        "id",
-        "patientId",
-        "date"
-      ]
-    },
-    "Report": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Report",
-      "type": "object",
-      "description": "Represents a report summarizing patient progress and session details.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Report entity."
-        },
-        "patientId": {
-          "type": "string",
-          "description": "Reference to Patient. (Relationship: Patient 1:N Report)"
-        },
-        "dateGenerated": {
-          "type": "string",
-          "description": "The date the report was generated.",
-          "format": "date-time"
-        },
-        "content": {
-          "type": "string",
-          "description": "The content of the report (e.g., in Markdown or HTML format)."
-        }
-      },
-      "required": [
-        "id",
-        "patientId",
-        "dateGenerated"
-      ]
+      "required": ["week", "date"]
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
+    "providers": ["password", "google.com"]
   },
   "firestore": {
-    "structure": [
-      {
-        "path": "/users/{userId}/patients/{patientId}",
-        "definition": {
-          "entityName": "Patient",
-          "schema": {
-            "$ref": "#/backend/entities/Patient"
-          },
-          "description": "Stores patient information for each user.  Each patient document is owned by the user identified by {userId}.  The structure enables simple ownership-based security rules.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The ID of the user who owns the patient data."
-            },
-            {
-              "name": "patientId",
-              "description": "The unique ID of the patient."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/patients/{patientId}/sessions/{sessionId}",
-        "definition": {
-          "entityName": "Session",
-          "schema": {
-            "$ref": "#/backend/entities/Session"
-          },
-          "description": "Stores therapy session data for a specific patient.  Nested under the patients collection, ensuring clear ownership and simplifies data retrieval. Each session is associated with a single patient.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The ID of the user who owns the patient data."
-            },
-            {
-              "name": "patientId",
-              "description": "The ID of the patient to whom the session belongs."
-            },
-            {
-              "name": "sessionId",
-              "description": "The unique ID of the session."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/patients/{patientId}/reports/{reportId}",
-        "definition": {
-          "entityName": "Report",
-          "schema": {
-            "$ref": "#/backend/entities/Report"
-          },
-          "description": "Stores reports for each patient. Nested under the patients collection for clear ownership and to facilitate easy access to all reports for a given patient. Each report is associated with a single patient.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The ID of the user who owns the patient data."
-            },
-            {
-              "name": "patientId",
-              "description": "The ID of the patient to whom the report belongs."
-            },
-            {
-              "name": "reportId",
-              "description": "The unique ID of the report."
-            }
-          ]
-        }
-      }
-    ],
-    "reasoning": "The Firestore data structure is designed to manage patient data, therapy sessions, and reports for the Mindful Meetings application. It leverages path-based ownership for user data and denormalization where necessary to ensure authorization independence and efficient data retrieval. The structure separates patient data, sessions, and reports into distinct collections to simplify security rules and improve query performance. Specifically, patient profiles are stored under `/users/{userId}/patients/{patientId}`, ensuring only the authenticated user (or admin, if applicable) can access their own patients. Sessions and reports follow a similar pattern under each patient, enabling clear ownership and easy querying of related data. This design promotes scalability and maintainability while adhering to the core principles of Authorization Independence, Clarity of Intent, DBAC (Database-Based Access Control), and QAPs (Rules are not Filters)."
+    "/users/{userId}/so_entries/{entryId}": {
+      "schema": { "$ref": "#/entities/SOEntry" },
+      "description": "User's personal SO Program ledger entries."
+    }
   }
 }

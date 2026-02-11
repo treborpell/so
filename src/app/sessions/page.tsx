@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { BrainCircuit, Sparkles, Loader2, Calendar, ClipboardList, BookOpen, Table as TableIcon, PlusCircle, CheckCircle, Wallet, Presentation, Paperclip } from "lucide-react"
+import { BrainCircuit, Sparkles, Loader2, ClipboardList, Table as TableIcon, PlusCircle, CheckCircle, Wallet, Presentation } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { summarizeSession } from "@/ai/flows/summarize-session"
 import { useToast } from "@/hooks/use-toast"
@@ -19,7 +19,7 @@ import { useUser } from "@/firebase/auth/use-user"
 import { addDoc, collection, query, orderBy, limit } from "firebase/firestore"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useCollection } from "@/firebase"
+import { useCollection, useMemoFirebase } from "@/firebase"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 export default function SOProgramLogPage() {
@@ -32,24 +32,28 @@ export default function SOProgramLogPage() {
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [aiInsight, setAiInsight] = useState<any>(null)
 
-  // Fetch recent logs for the Spreadsheet View
-  const entriesQuery = user ? query(collection(db, "profiles", user.uid, "so_entries"), orderBy("date", "desc"), limit(50)) : null;
+  // Fetch recent logs from the user-specific path with memoization
+  const entriesQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(
+      collection(db, "users", user.uid, "so_entries"), 
+      orderBy("date", "desc"), 
+      limit(100)
+    );
+  }, [db, user]);
+  
   const { data: recentEntries, loading: loadingEntries } = useCollection(entriesQuery);
 
   const [formData, setFormData] = useState({
     week: "",
     sessionNumber: "",
     date: new Date().toISOString().split('T')[0],
-    cost: "0.00",
+    cost: "68.25",
     paid: false,
     checkNumber: "",
     ableToPresent: false,
     presentationTopic: "",
-    notes: "",
-    receipt: "",
-    attachment1: "",
-    attachment2: "",
-    attachment3: ""
+    notes: ""
   })
 
   const handleGetInsight = async () => {
@@ -60,16 +64,16 @@ export default function SOProgramLogPage() {
     setIsSummarizing(true)
     try {
       const promptContent = `
-        SO Program Entry Details:
+        SO Program Entry:
         Week: ${formData.week}
         Session #: ${formData.sessionNumber}
         Topic: ${formData.presentationTopic}
         Notes: ${formData.notes}
-        Able to Present: ${formData.ableToPresent ? "Yes" : "No"}
+        Presented: ${formData.ableToPresent ? "Yes" : "No"}
       `
       const result = await summarizeSession({ sessionDetails: promptContent })
       setAiInsight(result)
-      toast({ title: "Analysis Ready", description: "Clinical insight generated." })
+      toast({ title: "Analysis Ready", description: "Growth insight generated." })
     } catch (error) {
       toast({ title: "AI Error", description: "Failed to process insight.", variant: "destructive" })
     } finally {
@@ -84,10 +88,9 @@ export default function SOProgramLogPage() {
     }
     setIsSaving(true)
     try {
-      await addDoc(collection(db, "profiles", user.uid, "so_entries"), {
+      await addDoc(collection(db, "users", user.uid, "so_entries"), {
         ...formData,
         week: Number(formData.week),
-        sessionNumber: Number(formData.sessionNumber),
         cost: Number(formData.cost),
         createdAt: new Date().toISOString(),
         aiInsight: aiInsight?.summary || ""
@@ -96,7 +99,7 @@ export default function SOProgramLogPage() {
       setFormData({
         ...formData,
         week: (Number(formData.week) + 1).toString(),
-        sessionNumber: (Number(formData.sessionNumber) + 1).toString(),
+        sessionNumber: "",
         presentationTopic: "",
         notes: "",
         checkNumber: ""
@@ -125,7 +128,7 @@ export default function SOProgramLogPage() {
                 <PlusCircle className="h-4 w-4 mr-2" /> New Entry
               </TabsTrigger>
               <TabsTrigger value="history" className="rounded-full text-xs font-bold px-6">
-                <TableIcon className="h-4 w-4 mr-2" /> Spreadsheet View
+                <TableIcon className="h-4 w-4 mr-2" /> History
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -141,34 +144,27 @@ export default function SOProgramLogPage() {
                       <div className="space-y-1">
                         <CardTitle className="text-3xl font-black flex items-center gap-3">
                           <ClipboardList className="h-8 w-8" />
-                          Session Log
+                          Log Entry
                         </CardTitle>
-                        <CardDescription className="text-primary-foreground/70 font-medium">SO Program Clinical & Financial Tracker</CardDescription>
+                        <CardDescription className="text-primary-foreground/70 font-medium">SO Program Session & Financial Tracker</CardDescription>
                       </div>
-                      <Badge variant="outline" className="border-white/50 text-white uppercase tracking-widest text-[10px] px-3 py-1 font-black bg-white/10">
-                        OFFICIAL RECORD
-                      </Badge>
                     </div>
                   </CardHeader>
 
                   <CardContent className="p-10 space-y-10">
-                    {/* Time & Reference */}
                     <div className="grid gap-6 md:grid-cols-3">
                       <div className="space-y-3">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">WK (Week)</Label>
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">WK</Label>
                         <Input 
                           type="number" 
-                          placeholder="e.g. 1" 
                           className="h-14 rounded-2xl border-slate-100 bg-slate-50 font-bold text-lg"
                           value={formData.week}
                           onChange={(e) => setFormData({...formData, week: e.target.value})}
                         />
                       </div>
                       <div className="space-y-3">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400"># (Session)</Label>
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">#</Label>
                         <Input 
-                          type="number" 
-                          placeholder="e.g. 12" 
                           className="h-14 rounded-2xl border-slate-100 bg-slate-50 font-bold text-lg"
                           value={formData.sessionNumber}
                           onChange={(e) => setFormData({...formData, sessionNumber: e.target.value})}
@@ -187,18 +183,15 @@ export default function SOProgramLogPage() {
 
                     <Separator />
 
-                    {/* Financials */}
                     <div className="bg-slate-50/50 p-8 rounded-3xl border border-slate-100 space-y-6">
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2">
                         <Wallet className="h-4 w-4 text-primary" />
-                        <h3 className="text-sm font-black uppercase tracking-wider text-slate-600">Financial Tracking</h3>
+                        <h3 className="text-sm font-black uppercase tracking-wider text-slate-600">Financials</h3>
                       </div>
                       <div className="grid gap-6 md:grid-cols-3 items-end">
                         <div className="space-y-3">
                           <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cost</Label>
                           <Input 
-                            type="text" 
-                            placeholder="0.00" 
                             className="h-14 rounded-2xl border-slate-100 bg-white font-bold"
                             value={formData.cost}
                             onChange={(e) => setFormData({...formData, cost: e.target.value})}
@@ -207,7 +200,6 @@ export default function SOProgramLogPage() {
                         <div className="space-y-3">
                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Check #</Label>
                            <Input 
-                            placeholder="Check number" 
                             className="h-14 rounded-2xl border-slate-100 bg-white font-bold"
                             value={formData.checkNumber}
                             onChange={(e) => setFormData({...formData, checkNumber: e.target.value})}
@@ -220,11 +212,10 @@ export default function SOProgramLogPage() {
                       </div>
                     </div>
 
-                    {/* Presentation */}
                     <div className="space-y-6">
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2">
                         <Presentation className="h-4 w-4 text-accent-foreground" />
-                        <h3 className="text-sm font-black uppercase tracking-wider text-slate-600">Presentation Status</h3>
+                        <h3 className="text-sm font-black uppercase tracking-wider text-slate-600">Presentation</h3>
                       </div>
                       <div className="grid gap-6 md:grid-cols-4 items-center">
                         <div className="flex items-center justify-between h-14 bg-slate-50 rounded-2xl border border-slate-100 px-6 md:col-span-1">
@@ -244,37 +235,16 @@ export default function SOProgramLogPage() {
 
                     <Separator />
 
-                    {/* Notes & Attachments */}
                     <div className="space-y-6">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Notes / Reflection</Label>
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Notes / Reflections</Label>
                       <Textarea 
-                        placeholder="Detailed clinical notes..." 
+                        placeholder="Clinical summary or personal breakthrough..." 
                         className="min-h-[200px] rounded-3xl border-slate-100 bg-slate-50 p-6 font-medium shadow-inner focus:bg-white transition-all text-lg"
                         value={formData.notes}
                         onChange={(e) => setFormData({...formData, notes: e.target.value})}
                       />
                     </div>
 
-                    <div className="grid gap-6 md:grid-cols-2">
-                       <div className="space-y-3">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-                          <Paperclip className="h-3 w-3" /> Attachments / Receipt
-                        </Label>
-                        <Input 
-                          placeholder="Receipt Reference" 
-                          className="h-12 rounded-xl border-slate-100 bg-slate-50"
-                          value={formData.receipt}
-                          onChange={(e) => setFormData({...formData, receipt: e.target.value})}
-                        />
-                        <div className="grid grid-cols-3 gap-2 mt-2">
-                          <Input placeholder="File 1" className="h-10 rounded-lg text-xs" value={formData.attachment1} onChange={(e) => setFormData({...formData, attachment1: e.target.value})} />
-                          <Input placeholder="File 2" className="h-10 rounded-lg text-xs" value={formData.attachment2} onChange={(e) => setFormData({...formData, attachment2: e.target.value})} />
-                          <Input placeholder="File 3" className="h-10 rounded-lg text-xs" value={formData.attachment3} onChange={(e) => setFormData({...formData, attachment3: e.target.value})} />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
                     <div className="flex flex-col sm:flex-row gap-4 pt-6">
                       <Button 
                         variant="outline" 
@@ -283,7 +253,7 @@ export default function SOProgramLogPage() {
                         disabled={isSummarizing}
                       >
                         {isSummarizing ? <Loader2 className="h-5 w-5 animate-spin mr-3" /> : <Sparkles className="h-5 w-5 mr-3 text-amber-500" />}
-                        AI Summary
+                        AI Review
                       </Button>
                       <Button 
                         className="flex-1 h-16 rounded-2xl text-lg font-black shadow-xl"
@@ -291,14 +261,14 @@ export default function SOProgramLogPage() {
                         disabled={isSaving}
                       >
                         {isSaving ? <Loader2 className="h-5 w-5 animate-spin mr-3" /> : <CheckCircle className="h-5 w-5 mr-3" />}
-                        Save Ledger Entry
+                        Save Entry
                       </Button>
                     </div>
                   </CardContent>
                 </Card>
 
                 {aiInsight && (
-                  <Card className="border-none bg-slate-900 text-white shadow-2xl rounded-[2.5rem] animate-in fade-in slide-in-from-bottom-5 duration-500">
+                  <Card className="border-none bg-slate-900 text-white shadow-2xl rounded-[2.5rem] animate-in fade-in slide-in-from-bottom-5">
                     <CardHeader className="p-10 border-b border-white/5">
                       <CardTitle className="text-2xl font-black flex items-center gap-4">
                         <BrainCircuit className="h-8 w-8 text-primary" />
@@ -307,12 +277,8 @@ export default function SOProgramLogPage() {
                     </CardHeader>
                     <CardContent className="p-10 space-y-8">
                       <div className="space-y-2">
-                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Key Takeaways</h4>
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Synthesis</h4>
                         <p className="text-xl font-bold leading-relaxed">{aiInsight.summary}</p>
-                      </div>
-                      <div className="bg-white/5 p-8 rounded-3xl border border-white/10">
-                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Focus Areas</h4>
-                        <div className="text-md leading-relaxed font-medium text-slate-200">{aiInsight.actionItems}</div>
                       </div>
                     </CardContent>
                   </Card>
@@ -323,12 +289,8 @@ export default function SOProgramLogPage() {
             <TabsContent value="history" className="mt-0">
                <Card className="border-none shadow-xl rounded-3xl bg-white overflow-hidden">
                 <CardHeader className="p-8 border-b">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-2xl font-bold">SO Program History</CardTitle>
-                      <CardDescription>Spreadsheet view matching your ledger columns.</CardDescription>
-                    </div>
-                  </div>
+                  <CardTitle className="text-2xl font-bold">Session History</CardTitle>
+                  <CardDescription>View your SO Program ledger in chronological order.</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                    <div className="overflow-x-auto">
@@ -339,27 +301,25 @@ export default function SOProgramLogPage() {
                           <TableHead className="font-bold text-[10px] uppercase">#</TableHead>
                           <TableHead className="font-bold text-[10px] uppercase">DATE</TableHead>
                           <TableHead className="font-bold text-[10px] uppercase">Cost</TableHead>
-                          <TableHead className="font-bold text-[10px] uppercase">Paid</TableHead>
-                          <TableHead className="font-bold text-[10px] uppercase">Check #</TableHead>
-                          <TableHead className="font-bold text-[10px] uppercase">Presentable</TableHead>
+                          <TableHead className="font-bold text-[10px] uppercase">Status</TableHead>
+                          <TableHead className="font-bold text-[10px] uppercase">Presented</TableHead>
                           <TableHead className="font-bold text-[10px] uppercase">Topic</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {recentEntries?.map((entry: any) => (
-                          <TableRow key={entry.id} className="hover:bg-slate-50/50 transition-colors">
+                          <TableRow key={entry.id}>
                             <TableCell className="font-black text-primary">{entry.week}</TableCell>
                             <TableCell className="font-bold">{entry.sessionNumber}</TableCell>
                             <TableCell className="text-xs">{entry.date}</TableCell>
-                            <TableCell className="font-mono text-xs">${entry.cost.toFixed(2)}</TableCell>
+                            <TableCell className="font-mono text-xs">${entry.cost?.toFixed(2)}</TableCell>
                             <TableCell>
                               {entry.paid ? (
-                                <Badge variant="default" className="bg-emerald-500 rounded-full h-5 text-[9px]">PAID</Badge>
+                                <Badge className="bg-emerald-500 rounded-full h-5 text-[9px]">PAID</Badge>
                               ) : (
                                 <Badge variant="destructive" className="rounded-full h-5 text-[9px]">DUE</Badge>
                               )}
                             </TableCell>
-                            <TableCell className="text-[10px] font-mono">{entry.checkNumber || "-"}</TableCell>
                             <TableCell>
                                {entry.ableToPresent ? (
                                 <span className="text-emerald-500 font-bold text-[10px]">YES</span>
@@ -367,15 +327,15 @@ export default function SOProgramLogPage() {
                                 <span className="text-slate-300 font-bold text-[10px]">NO</span>
                               )}
                             </TableCell>
-                            <TableCell className="text-xs font-bold max-w-[200px] truncate">
+                            <TableCell className="text-xs font-bold truncate max-w-[200px]">
                               {entry.presentationTopic}
                             </TableCell>
                           </TableRow>
                         ))}
                         {(!recentEntries || recentEntries.length === 0) && !loadingEntries && (
                           <TableRow>
-                            <TableCell colSpan={8} className="text-center py-20 text-muted-foreground italic">
-                              No entries found in history.
+                            <TableCell colSpan={7} className="text-center py-20 text-muted-foreground italic">
+                              Your ledger is currently empty.
                             </TableCell>
                           </TableRow>
                         )}

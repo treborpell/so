@@ -7,13 +7,18 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, Circle, Clock, Plus } from "lucide-react"
-import { useCollection } from "@/firebase"
+import { useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
 import { useFirestore } from "@/firebase/provider"
 
 export default function AssignmentsPage() {
   const db = useFirestore();
-  const assignmentsQuery = query(collection(db, "assignments"), orderBy("dueDate", "desc"));
+  
+  const assignmentsQuery = useMemoFirebase(() => {
+    if (!db) return null;
+    return query(collection(db, "assignments"), orderBy("dueDate", "desc"));
+  }, [db]);
+  
   const { data: assignments, loading } = useCollection(assignmentsQuery);
 
   return (

@@ -1,109 +1,22 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    /**
-     * CORE PHILOSOPHY:
-     * This ruleset enforces a strict User-Ownership model. All data is logically and 
-     * physically siloed under a specific user's path (/users/{userId}).
-     * 
-     * DATA STRUCTURE:
-     * The hierarchy follows a strict parent-child relationship: 
-     * User -> Patient -> Sessions/Reports.
-     * 
-     * KEY SECURITY DECISIONS:
-     * 1. Path-Based Authorization: Access is primarily determined by the {userId} 
-     *    variable in the document path. This provides the most efficient and 
-     *    secure way to segment data in Firestore.
-     * 2. Identity Source of Truth: All checks rely exclusively on request.auth.uid.
-     * 3. Prototyping Flexibility: While ownership is strictly enforced, the 
-     *    internal schema (fields and types) is kept flexible to allow for rapid 
-     *    frontend iteration.
-     * 4. Denormalization: Critical relational fields (like patientId) are 
-     *    validated against the path to ensure data integrity.
-     */
-
-    /** 
-     * GLOBAL HELPER FUNCTIONS
-     */
-
-    // Returns true if the request is from an authenticated user.
+    // Helper to check if user is signed in
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Returns true if the authenticated user's UID matches the provided userId.
+    // Helper to check if user owns the document path
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Returns true if the owner is modifying or deleting an existing document.
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
+    match /users/{userId}/so_entries/{entryId} {
+      allow read, write: if isOwner(userId);
     }
 
-    /**
-     * PATIENT RULES
-     * @description Rules for managing patients. Only the owner of the user-specific path can access.
-     * @path /users/{userId}/patients/{patientId}
-     * @allow Authenticated user "abc" to (create) a patient under "/users/abc/patients/123".
-     * @deny Authenticated user "xyz" trying to (get) a patient under "/users/abc/patients/123".
-     * @principle Restricts access to a user's own data tree using path-based ownership.
-     */
-    match /users/{userId}/patients/{patientId} {
-      allow get, list: if isOwner(userId);
-      
-      // Ensure the user owns the path. For prototyping, we don't strictly 
-      // validate internal fields, but the path itself provides security.
-      allow create: if isOwner(userId);
-      
-      allow update, delete: if isExistingOwner(userId);
-
-      /**
-       * SESSION RULES
-       * @description Rules for therapy sessions. Nested under a specific patient.
-       * @path /users/{userId}/patients/{patientId}/sessions/{sessionId}
-       * @allow Owner "abc" to (list) sessions for their patient "p1".
-       * @deny User "abc" to (create) a session if the 'patientId' in data doesn't match the path.
-       * @principle Enforces path ownership and validates relational integrity for parent links.
-       */
-      match /sessions/{sessionId} {
-        allow get, list: if isOwner(userId);
-
-        // On create, ensure the patientId in the data matches the document's parent in the path.
-        allow create: if isOwner(userId) 
-          && request.resource.data.patientId == patientId;
-
-        // On update, ensure the patient link remains immutable.
-        allow update: if isExistingOwner(userId) 
-          && request.resource.data.patientId == resource.data.patientId;
-
-        allow delete: if isExistingOwner(userId);
-      }
-
-      /**
-       * REPORT RULES
-       * @description Rules for progress reports. Nested under a specific patient.
-       * @path /users/{userId}/patients/{patientId}/reports/{reportId}
-       * @allow Owner "abc" to (get) a specific report for their patient.
-       * @deny Unauthenticated user to (list) any reports.
-       * @principle Protects medical/sensitive reports with strict path-based ownership.
-       */
-      match /reports/{reportId} {
-        allow get, list: if isOwner(userId);
-
-        // Relational check: Ensure the report is being filed for the correct patient.
-        allow create: if isOwner(userId) 
-          && request.resource.data.patientId == patientId;
-
-        allow update: if isExistingOwner(userId) 
-          && request.resource.data.patientId == resource.data.patientId;
-
-        allow delete: if isExistingOwner(userId);
-      }
-    }
-
-    // Fallback: Deny all other access
+    // Fallback for everything else
     match /{document=**} {
       allow read, write: if false;
     }

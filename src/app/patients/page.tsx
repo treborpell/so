@@ -6,17 +6,22 @@ import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, UserPlus, TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { Search, UserPlus, Users } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { useCollection } from "@/firebase"
+import { useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
 import { useFirestore } from "@/firebase/provider"
 
 export default function PatientsPage() {
   const db = useFirestore();
-  const patientsQuery = query(collection(db, "patients"), orderBy("name"));
+  
+  const patientsQuery = useMemoFirebase(() => {
+    if (!db) return null;
+    return query(collection(db, "patients"), orderBy("name"));
+  }, [db]);
+  
   const { data: patients, loading } = useCollection(patientsQuery);
 
   return (
@@ -37,7 +42,7 @@ export default function PatientsPage() {
           <div className="max-w-6xl mx-auto space-y-4">
              <div className="flex items-center gap-2 bg-white p-1 rounded-2xl shadow-sm border border-slate-100">
               <Search className="ml-3 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search logs..." className="border-none shadow-none focus-visible:ring-0 bg-transparent h-10" />
+              <Input placeholder="Search roster..." className="border-none shadow-none focus-visible:ring-0 bg-transparent h-10" />
             </div>
 
             {loading ? (
