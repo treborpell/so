@@ -30,9 +30,13 @@ export default function ImportPage() {
 
   const formatDateForStorage = (dateStr: string) => {
     if (!dateStr || dateStr.toLowerCase() === "na" || dateStr.trim() === "") return "";
+    // If already YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+    
+    // Try to handle M/D/YY or M/D/YYYY
     const parts = dateStr.split(/[-/]/);
     if (parts.length !== 3) return dateStr;
+    
     let [m, d, y] = parts;
     m = m.padStart(2, '0');
     d = d.padStart(2, '0');
@@ -78,7 +82,6 @@ export default function ImportPage() {
         }
       }
       toast({ title: "Migration Complete", description: `Successfully standardized ${fixedCount} dates.` });
-      router.push("/sessions?tab=history");
     } catch (error: any) {
       toast({ title: "Migration Failed", description: error.message, variant: "destructive" });
     } finally {
@@ -89,9 +92,10 @@ export default function ImportPage() {
   const parseData = (text: string) => {
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '')
     if (lines.length < 2) return []
+    
     const firstLine = lines[0]
     const delimiter = firstLine.includes('\t') ? '\t' : ','
-    const headers = firstLine.split(delimiter).map(h => h.trim().replace(/"/g, ''))
+    const headers = firstLine.split(delimiter).map(h => h.trim().toLowerCase().replace(/"/g, ''))
     const result = []
 
     for (let i = 1; i < lines.length; i++) {
@@ -110,9 +114,8 @@ export default function ImportPage() {
         createdAt: new Date().toISOString()
       }
 
-      headers.forEach((header, index) => {
+      headers.forEach((h, index) => {
         const val = values[index] || ""
-        const h = header.toLowerCase().trim()
         if (h === "wk" || h === "week") entry.week = Number(val) || 0
         else if (h === "#" || h === "session" || h === "no") entry.sessionNumber = val || "0"
         else if (h === "date") entry.date = formatDateForStorage(val)
@@ -121,10 +124,13 @@ export default function ImportPage() {
           entry.paidAmount = Number(val.replace(/[^0-9.-]+/g, "")) || 0
         }
         else if (h === "check #" || h === "check") entry.checkNumber = val
-        else if (h === "presented") entry.ableToPresent = ["YES", "TRUE", "1", "Y"].includes(val.toUpperCase())
-        else if (h === "topic") entry.presentationTopic = val
+        else if (h === "presented" || h === "able to present") {
+          entry.ableToPresent = ["YES", "TRUE", "1", "Y"].includes(val.toUpperCase())
+        }
+        else if (h === "topic" || h === "presentation topic") entry.presentationTopic = val
         else if (h === "notes") entry.notes = val
       })
+      
       if (entry.week || entry.date) result.push(entry)
     }
     return result
@@ -135,7 +141,7 @@ export default function ImportPage() {
     setIsUploading(true)
     const entries = parseData(pasteContent)
     if (entries.length === 0) {
-      toast({ title: "Parse Error", description: "No valid rows found.", variant: "destructive" })
+      toast({ title: "Parse Error", description: "No valid rows found. Check your headers.", variant: "destructive" })
       setIsUploading(false)
       return
     }
@@ -147,16 +153,23 @@ export default function ImportPage() {
       for (const entry of entries) {
         count++
         setImportStatus(prev => ({ ...prev, current: count }))
+        
+        // Find existing record to update (Upsert)
         let existingDocId = null
         if (entry.week && entry.date) {
           const q = query(colRef, where("week", "==", entry.week), where("date", "==", entry.date), limit(1))
           const querySnapshot = await getDocs(q)
-          if (!querySnapshot.empty) existingDocId = querySnapshot.docs[0].id
+          if (!querySnapshot.empty) {
+            existingDocId = querySnapshot.docs[0].id
+          }
         }
+
         if (existingDocId) {
+          // Update existing doc (don't overwrite createdAt)
           const { createdAt, ...updateData } = entry
           await updateDoc(doc(db, "users", user.uid, "so_entries", existingDocId), updateData)
         } else {
+          // Add new doc
           await addDoc(colRef, entry)
         }
       }
@@ -182,7 +195,7 @@ export default function ImportPage() {
           <div className="space-y-8">
             <div className="flex justify-between items-start">
               <div className="space-y-2">
-                <h1 className="text-3xl font-bold tracking-tight">Financial & Date Sync</h1>
+                <h1 className="text-3xl font-bold tracking-tight">Financial & Data Sync</h1>
                 <p className="text-muted-foreground">Manage your ledger, fix dates, or erase everything to start over.</p>
               </div>
               <AlertDialog>
@@ -222,8 +235,8 @@ export default function ImportPage() {
               </Card>
               <Card className="border-none shadow-sm bg-emerald-50/30">
                 <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-500" />Ready to Paste</CardTitle>
-                  <CardDescription>The system will now update existing rows instead of duplicating them.</CardDescription>
+                  <CardTitle className="text-lg flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-500" />Smart Sync</CardTitle>
+                  <CardDescription>Pasting data will update existing sessions based on Week/Date.</CardDescription>
                 </CardHeader>
               </Card>
             </div>
@@ -231,7 +244,7 @@ export default function ImportPage() {
             <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white">
               <CardContent className="p-8 space-y-6">
                 <Textarea 
-                  placeholder="Paste Excel rows here (Include headers: WK, DATE, Cost, Paid...)" 
+                  placeholder="Paste spreadsheet rows here... (Headers: WK, Date, Cost, Paid, Able to Present, Presentation Topic, Notes)" 
                   className="min-h-[300px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs p-6 shadow-inner"
                   value={pasteContent}
                   onChange={(e) => setPasteContent(e.target.value)}
