@@ -3,13 +3,13 @@
 
 import { 
   LayoutDashboard, 
-  BookOpen, 
   CheckSquare, 
   TrendingUp, 
   Sparkles,
   LogOut,
   BrainCircuit,
-  ClipboardList
+  ClipboardList,
+  Upload
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -28,11 +28,12 @@ import {
 
 const mainNav = [
   { name: "My Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Session Logs", href: "/sessions", icon: ClipboardList },
+  { name: "SO Program Log", href: "/sessions", icon: ClipboardList },
   { name: "Assignments", href: "/assignments", icon: CheckSquare },
 ]
 
 const toolsNav = [
+  { name: "Import Data", href: "/import", icon: Upload },
   { name: "Wellness Trends", href: "/reports", icon: TrendingUp },
   { name: "Growth Insights", href: "/summaries", icon: Sparkles },
 ]
