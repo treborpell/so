@@ -7,9 +7,9 @@ import {
   CheckSquare, 
   TrendingUp, 
   Sparkles,
-  Settings,
   LogOut,
-  BrainCircuit
+  BrainCircuit,
+  ClipboardList
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -28,13 +28,13 @@ import {
 
 const mainNav = [
   { name: "My Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "My Reflections", href: "/sessions", icon: BookOpen },
+  { name: "Session Logs", href: "/sessions", icon: ClipboardList },
   { name: "Assignments", href: "/assignments", icon: CheckSquare },
 ]
 
 const toolsNav = [
-  { name: "Wellness Trends", href: "/patients", icon: TrendingUp },
-  { name: "AI Insights", href: "/summaries", icon: Sparkles },
+  { name: "Wellness Trends", href: "/reports", icon: TrendingUp },
+  { name: "Growth Insights", href: "/summaries", icon: Sparkles },
 ]
 
 export function AppSidebar() {
@@ -49,7 +49,7 @@ export function AppSidebar() {
           </div>
           <div>
             <h1 className="font-headline font-bold text-lg tracking-tight">Mindful</h1>
-            <p className="text-xs text-muted-foreground font-medium">My Personal Log</p>
+            <p className="text-xs text-muted-foreground font-medium">SO Program Tracker</p>
           </div>
         </div>
       </SidebarHeader>
