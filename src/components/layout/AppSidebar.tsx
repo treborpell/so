@@ -1,14 +1,15 @@
+
 "use client"
 
 import { 
   LayoutDashboard, 
-  Users, 
-  Calendar, 
-  Upload, 
-  FileBarChart, 
+  BookOpen, 
+  CheckSquare, 
+  TrendingUp, 
+  Sparkles,
   Settings,
-  BrainCircuit,
-  LogOut
+  LogOut,
+  BrainCircuit
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -26,15 +27,14 @@ import {
 } from "@/components/ui/sidebar"
 
 const mainNav = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Patients", href: "/patients", icon: Users },
-  { name: "Sessions", href: "/sessions", icon: Calendar },
+  { name: "My Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "My Reflections", href: "/sessions", icon: BookOpen },
+  { name: "Assignments", href: "/assignments", icon: CheckSquare },
 ]
 
 const toolsNav = [
-  { name: "Import Data", href: "/import", icon: Upload },
-  { name: "AI Summaries", href: "/summaries", icon: BrainCircuit },
-  { name: "Reports", href: "/reports", icon: FileBarChart },
+  { name: "Wellness Trends", href: "/patients", icon: TrendingUp },
+  { name: "AI Insights", href: "/summaries", icon: Sparkles },
 ]
 
 export function AppSidebar() {
@@ -49,14 +49,14 @@ export function AppSidebar() {
           </div>
           <div>
             <h1 className="font-headline font-bold text-lg tracking-tight">Mindful</h1>
-            <p className="text-xs text-muted-foreground font-medium">Group Therapy</p>
+            <p className="text-xs text-muted-foreground font-medium">My Personal Log</p>
           </div>
         </div>
       </SidebarHeader>
       
       <SidebarContent className="px-3">
         <SidebarGroup>
-          <SidebarGroupLabel className="px-4 text-[10px] uppercase tracking-widest font-bold text-muted-foreground/70">Management</SidebarGroupLabel>
+          <SidebarGroupLabel className="px-4 text-[10px] uppercase tracking-widest font-bold text-muted-foreground/70">My Journey</SidebarGroupLabel>
           <SidebarMenu>
             {mainNav.map((item) => (
               <SidebarMenuItem key={item.name}>
@@ -74,7 +74,7 @@ export function AppSidebar() {
         <SidebarSeparator className="my-2" />
 
         <SidebarGroup>
-          <SidebarGroupLabel className="px-4 text-[10px] uppercase tracking-widest font-bold text-muted-foreground/70">Tools & Analytics</SidebarGroupLabel>
+          <SidebarGroupLabel className="px-4 text-[10px] uppercase tracking-widest font-bold text-muted-foreground/70">Growth & Tools</SidebarGroupLabel>
           <SidebarMenu>
             {toolsNav.map((item) => (
               <SidebarMenuItem key={item.name}>
@@ -91,10 +91,6 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-4">
-        <div className="rounded-2xl bg-accent/30 p-4 mb-4">
-          <p className="text-xs font-semibold mb-1 text-accent-foreground">Need support?</p>
-          <p className="text-[10px] text-muted-foreground leading-relaxed">Contact your clinical supervisor for system access issues.</p>
-        </div>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton className="text-muted-foreground hover:text-destructive">

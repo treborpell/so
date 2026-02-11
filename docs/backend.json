@@ -1,51 +1,61 @@
 
 {
   "entities": {
-    "Patient": {
-      "title": "Patient",
-      "description": "Information about a patient in the therapy group.",
+    "Profile": {
+      "title": "User Profile",
+      "description": "Personal details and aggregate wellness data.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "name": { "type": "string" },
-        "email": { "type": "string", "format": "email" },
-        "groupName": { "type": "string" },
-        "wellnessScore": { "type": "number", "description": "Latest emotional wellness score (0-100)" },
-        "totalSessions": { "type": "number" },
-        "lastSessionDate": { "type": "string", "format": "date" },
-        "status": { "type": "string", "enum": ["active", "discharged", "on-hold"] }
-      },
-      "required": ["name", "groupName"]
+        "displayName": { "type": "string" },
+        "currentWellnessScore": { "type": "number" },
+        "sessionsCompleted": { "type": "number" },
+        "joinedDate": { "type": "string", "format": "date" }
+      }
     },
-    "Session": {
-      "title": "Session",
-      "description": "Details of a group therapy session.",
+    "Reflection": {
+      "title": "Personal Reflection",
+      "description": "Daily or session-based personal notes and mood tracking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "moodScore": { "type": "number", "description": "1-10 scale" },
+        "notes": { "type": "string" },
+        "aiInsight": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["date", "notes"]
+    },
+    "Assignment": {
+      "title": "Therapy Assignment",
+      "description": "Tasks or homework given by the therapist or self-assigned.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "title": { "type": "string" },
-        "date": { "type": "string", "format": "date" },
-        "groupName": { "type": "string" },
-        "attendeeIds": { "type": "array", "items": { "type": "string" } },
-        "clinicalNotes": { "type": "string" },
-        "aiSummary": { "type": "string" },
-        "actionItems": { "type": "string" },
-        "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled"] }
+        "description": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["pending", "completed", "archived"] }
       },
-      "required": ["title", "date", "groupName"]
+      "required": ["title", "status"]
     }
   },
   "auth": {
     "providers": ["google.com", "password"]
   },
   "firestore": {
-    "/patients/{patientId}": {
-      "schema": "Patient",
-      "description": "Collection of patient records."
+    "/profiles/{userId}": {
+      "schema": "Profile",
+      "description": "Individual user settings and stats."
     },
-    "/sessions/{sessionId}": {
-      "schema": "Session",
-      "description": "Collection of therapy session logs."
+    "/profiles/{userId}/reflections/{reflectionId}": {
+      "schema": "Reflection",
+      "description": "Personal journal and reflection logs."
+    },
+    "/profiles/{userId}/assignments/{assignmentId}": {
+      "schema": "Assignment",
+      "description": "Therapy homework and action items."
     }
   }
 }
