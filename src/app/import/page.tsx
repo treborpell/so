@@ -6,47 +6,25 @@ import { AppSidebar } from "@/components/layout/AppSidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2 } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
+import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, ClipboardPaste } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore } from "@/firebase/provider"
 import { useUser } from "@/firebase/auth/use-user"
 import { addDoc, collection } from "firebase/firestore"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function ImportPage() {
   const { user } = useUser()
   const db = useFirestore()
   const { toast } = useToast()
   
-  const [isDragging, setIsDragging] = useState(false)
   const [file, setFile] = useState<File | null>(null)
+  const [pasteContent, setPasteContent] = useState("")
   const [isUploading, setIsUploading] = useState(false)
   const [importCount, setImportCount] = useState(0)
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
-  const handleDragLeave = () => {
-    setIsDragging(false)
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-    const droppedFile = e.dataTransfer.files[0]
-    if (droppedFile && (droppedFile.name.endsWith(".csv") || droppedFile.name.endsWith(".txt"))) {
-      setFile(droppedFile)
-    } else {
-      toast({
-        title: "Invalid file format",
-        description: "Please upload a .csv file.",
-        variant: "destructive"
-      })
-    }
-  }
-
-  const parseCSV = (text: string) => {
+  const parseData = (text: string) => {
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '')
     if (lines.length < 2) return []
 
@@ -63,24 +41,24 @@ export default function ImportPage() {
       
       headers.forEach((header, index) => {
         const val = values[index] || ""
-        // Mapping based on headers: WK # DATE Cost Paid Check # Able to Present Presentation Topic Notes Receipt Attachment 1 Attachment 2 Attachment 3
-        const h = header.toUpperCase()
+        const h = header.toUpperCase().trim()
+        
         if (h === "WK") entry.week = Number(val) || 0
-        else if (h === "#") entry.sessionNumber = Number(val) || 0
+        else if (h === "#") entry.sessionNumber = val || "0"
         else if (h === "DATE") entry.date = val
         else if (h === "COST") entry.cost = Number(val.replace(/[^0-9.-]+/g, "")) || 0
-        else if (h === "PAID") entry.paid = ["YES", "TRUE", "1"].includes(val.toUpperCase())
+        else if (h === "PAID") {
+           const cleanVal = val.replace(/[^0-9.-]+/g, "")
+           const paidAmount = Number(cleanVal) || 0
+           entry.paid = paidAmount > 0 || ["YES", "TRUE", "1"].includes(val.toUpperCase())
+        }
         else if (h === "CHECK #") entry.checkNumber = val
         else if (h === "ABLE TO PRESENT") entry.ableToPresent = ["YES", "TRUE", "1"].includes(val.toUpperCase())
         else if (h === "PRESENTATION TOPIC") entry.presentationTopic = val
         else if (h === "NOTES") entry.notes = val
         else if (h === "RECEIPT") entry.receipt = val
-        else if (h === "ATTACHMENT 1") entry.attachment1 = val
-        else if (h === "ATTACHMENT 2") entry.attachment2 = val
-        else if (h === "ATTACHMENT 3") entry.attachment3 = val
       })
       
-      // Validation: require at least week or date to be considered a row
       if (entry.week || entry.date) {
         result.push(entry)
       }
@@ -88,21 +66,20 @@ export default function ImportPage() {
     return result
   }
 
-  const handleProcessImport = async () => {
-    if (!file || !user) return
+  const handleProcessImport = async (textSource: string) => {
+    if (!textSource || !user) return
     
     setIsUploading(true)
     try {
-      const text = await file.text()
-      const entries = parseCSV(text)
+      const entries = parseData(textSource)
       
       if (entries.length === 0) {
-        throw new Error("No valid data found in CSV. Ensure your headers match: WK, #, DATE, Cost, Paid, etc.")
+        throw new Error("No valid data found. Ensure headers match: WK, #, DATE, Cost, Paid, etc.")
       }
 
       let count = 0
       for (const entry of entries) {
-        await addDoc(collection(db, "profiles", user.uid, "so_entries"), {
+        addDoc(collection(db, "profiles", user.uid, "so_entries"), {
           ...entry,
           createdAt: new Date().toISOString(),
           aiInsight: ""
@@ -112,10 +89,11 @@ export default function ImportPage() {
       }
 
       toast({
-        title: "Import Successful",
-        description: `Successfully imported ${count} ledger entries.`,
+        title: "Importing...",
+        description: `Adding ${count} ledger entries to your record.`,
       })
       setFile(null)
+      setPasteContent("")
       setImportCount(0)
     } catch (error: any) {
       toast({
@@ -141,90 +119,112 @@ export default function ImportPage() {
           <div className="space-y-8">
             <div className="space-y-2">
               <h1 className="text-3xl font-bold tracking-tight">Sync your Spreadsheet</h1>
-              <p className="text-muted-foreground">Upload your CSV therapy tracker. We'll automatically parse your WK, session #, costs, and notes.</p>
+              <p className="text-muted-foreground">Upload your CSV or simply paste your Excel rows below. We'll automatically parse your session data.</p>
             </div>
 
-            <Card className={`border-2 border-dashed transition-all duration-300 ${isDragging ? "border-primary bg-primary/5" : "border-slate-200"}`}>
-              <CardContent 
-                className="p-12 text-center"
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                {!file ? (
-                  <div className="space-y-6">
-                    <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <Upload className="h-10 w-10" />
+            <Tabs defaultValue="paste" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 rounded-2xl h-12">
+                <TabsTrigger value="paste" className="rounded-xl font-bold">Paste Text</TabsTrigger>
+                <TabsTrigger value="file" className="rounded-xl font-bold">Upload File</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="paste" className="mt-6">
+                <Card className="border-none shadow-xl rounded-3xl overflow-hidden">
+                  <CardContent className="p-6 space-y-4">
+                    <div className="flex items-center gap-2 text-primary font-bold mb-2">
+                      <ClipboardPaste className="h-5 w-5" />
+                      <h3>Paste from Excel</h3>
                     </div>
-                    <div className="space-y-2">
-                      <h3 className="text-xl font-semibold">Drop your CSV here</h3>
-                      <p className="text-sm text-muted-foreground">Supports CSV files exported from Excel</p>
-                    </div>
-                    <label className="cursor-pointer inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
-                      Select File
-                      <input 
-                        type="file" 
-                        className="hidden" 
-                        accept=".csv" 
-                        onChange={(e) => setFile(e.target.files?.[0] || null)}
-                      />
-                    </label>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                      <FileSpreadsheet className="h-10 w-10" />
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-xl font-semibold">{file.name}</h3>
-                      <p className="text-sm text-muted-foreground">{(file.size / 1024).toFixed(2)} KB • Ready to import</p>
-                    </div>
-                    {isUploading && (
-                      <div className="flex flex-col items-center gap-2">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                        <p className="text-xs font-bold">Importing row {importCount}...</p>
+                    <Textarea 
+                      placeholder="Paste your spreadsheet rows here (including headers)..." 
+                      className="min-h-[300px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs"
+                      value={pasteContent}
+                      onChange={(e) => setPasteContent(e.target.value)}
+                    />
+                    <Button 
+                      className="w-full h-14 rounded-2xl font-black text-lg shadow-lg"
+                      disabled={!pasteContent || isUploading}
+                      onClick={() => handleProcessImport(pasteContent)}
+                    >
+                      {isUploading ? (
+                        <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processing {importCount}...</>
+                      ) : (
+                        "Import Pasted Data"
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="file" className="mt-6">
+                <Card className="border-2 border-dashed border-slate-200 rounded-3xl">
+                  <CardContent className="p-12 text-center">
+                    {!file ? (
+                      <div className="space-y-6">
+                        <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary">
+                          <Upload className="h-10 w-10" />
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-xl font-semibold">Drop your CSV here</h3>
+                          <label className="cursor-pointer inline-flex h-10 items-center justify-center rounded-xl border border-input bg-background px-6 py-2 text-sm font-bold hover:bg-accent transition-all">
+                            Select File
+                            <input 
+                              type="file" 
+                              className="hidden" 
+                              accept=".csv" 
+                              onChange={(e) => setFile(e.target.files?.[0] || null)}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                          <FileSpreadsheet className="h-10 w-10" />
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-xl font-semibold">{file.name}</h3>
+                          <p className="text-sm text-muted-foreground">Ready to import</p>
+                        </div>
+                        <div className="flex gap-3 justify-center">
+                          <Button variant="outline" onClick={() => setFile(null)} disabled={isUploading}>Cancel</Button>
+                          <Button 
+                            onClick={async () => handleProcessImport(await file.text())} 
+                            disabled={isUploading} 
+                            className="shadow-lg rounded-xl"
+                          >
+                            Start File Import
+                          </Button>
+                        </div>
                       </div>
                     )}
-                    <div className="flex gap-3 justify-center">
-                      <Button variant="outline" onClick={() => setFile(null)} disabled={isUploading}>Cancel</Button>
-                      <Button onClick={handleProcessImport} disabled={isUploading} className="shadow-lg">
-                        {isUploading ? "Processing..." : "Start Import"}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
 
             <div className="grid gap-6 md:grid-cols-2">
-              <Card className="border-none shadow-sm bg-slate-50">
-                <CardHeader className="p-4">
+              <Card className="border-none shadow-sm bg-slate-50 rounded-2xl">
+                <CardContent className="p-4 space-y-2">
                   <h3 className="text-sm font-bold flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    Expected Headers
+                    Header Match
                   </h3>
-                </CardHeader>
-                <CardContent className="text-xs text-muted-foreground px-4 pb-4">
-                  <p className="mb-2">Your CSV should include these exact columns:</p>
-                  <code className="block bg-slate-100 p-2 rounded">
-                    WK, #, DATE, Cost, Paid, Check #, Able to Present, Presentation Topic, Notes, Receipt, Attachment 1, Attachment 2, Attachment 3
-                  </code>
+                  <p className="text-[10px] text-muted-foreground">
+                    The tool looks for: <code className="bg-slate-200 px-1 rounded">WK</code>, <code className="bg-slate-200 px-1 rounded">#</code>, <code className="bg-slate-200 px-1 rounded">DATE</code>, <code className="bg-slate-200 px-1 rounded">Cost</code>, <code className="bg-slate-200 px-1 rounded">Paid</code>, <code className="bg-slate-200 px-1 rounded">Notes</code>
+                  </p>
                 </CardContent>
               </Card>
 
-              <Card className="border-none shadow-sm bg-slate-50">
-                <CardHeader className="p-4">
+              <Card className="border-none shadow-sm bg-slate-50 rounded-2xl">
+                <CardContent className="p-4 space-y-2">
                   <h3 className="text-sm font-bold flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-blue-600" />
-                    Import Tips
+                    Tip
                   </h3>
-                </CardHeader>
-                <CardContent className="text-xs text-muted-foreground px-4 pb-4">
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Export your Excel sheet as "CSV (Comma delimited)"</li>
-                    <li>Ensure the first row contains the headers</li>
-                    <li>Dates should be in a standard format (YYYY-MM-DD)</li>
-                  </ul>
+                  <p className="text-[10px] text-muted-foreground">
+                    Pasting works best if you select all rows in Excel, copy, and paste here.
+                  </p>
                 </CardContent>
               </Card>
             </div>
@@ -233,8 +233,4 @@ export default function ImportPage() {
       </SidebarInset>
     </div>
   )
-}
-
-function CardHeader({ children, className }: { children: React.ReactNode, className?: string }) {
-  return <div className={className}>{children}</div>
 }

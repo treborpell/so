@@ -20,7 +20,7 @@
       "properties": {
         "id": { "type": "string" },
         "week": { "type": "number", "description": "WK column" },
-        "sessionNumber": { "type": "number", "description": "# column" },
+        "sessionNumber": { "type": "string", "description": "# column (supports 'x' for excused)" },
         "date": { "type": "string", "format": "date" },
         "cost": { "type": "number" },
         "paid": { "type": "boolean" },
@@ -34,7 +34,7 @@
         "attachment3": { "type": "string" },
         "aiInsight": { "type": "string" }
       },
-      "required": ["week", "sessionNumber", "date", "presentationTopic"]
+      "required": ["week", "sessionNumber", "date"]
     },
     "Assignment": {
       "title": "Therapy Assignment",
