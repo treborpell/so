@@ -4,13 +4,14 @@
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, Wallet, Heart, Sparkles, Plus, AlertCircle } from "lucide-react";
+import { BookOpen, Wallet, Heart, Sparkles, Plus, AlertCircle, History, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useCollection, useMemoFirebase } from "@/firebase";
 import { collection, query, limit, orderBy } from "firebase/firestore";
 import { useFirestore } from "@/firebase/provider";
 import { useUser } from "@/firebase/auth/use-user";
+import { Badge } from "@/components/ui/badge";
 
 export default function DashboardPage() {
   const db = useFirestore();
@@ -25,8 +26,8 @@ export default function DashboardPage() {
 
   const totals = logs?.reduce((acc, log) => {
     return {
-      cost: acc.cost + (log.cost || 0),
-      paid: acc.paid + (log.paidAmount || 0)
+      cost: acc.cost + (Number(log.cost) || 0),
+      paid: acc.paid + (Number(log.paidAmount) || 0)
     }
   }, { cost: 0, paid: 0 }) || { cost: 0, paid: 0 };
 
@@ -53,9 +54,14 @@ export default function DashboardPage() {
             <SidebarTrigger />
             <h2 className="text-lg font-bold">My Journey</h2>
           </div>
-          <Button asChild size="sm" className="rounded-full shadow-lg h-10 px-4">
-            <Link href="/sessions"><Plus className="h-4 w-4 mr-2" /> New Log</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm" className="rounded-full h-10 px-4 hidden sm:flex">
+              <Link href="/sessions?tab=history"><History className="h-4 w-4 mr-2" /> History</Link>
+            </Button>
+            <Button asChild size="sm" className="rounded-full shadow-lg h-10 px-4">
+              <Link href="/sessions?tab=new-entry"><Plus className="h-4 w-4 mr-2" /> New Log</Link>
+            </Button>
+          </div>
         </header>
 
         <main className="flex-1 p-4 space-y-6">
@@ -77,9 +83,14 @@ export default function DashboardPage() {
 
           <section className="grid gap-4 md:grid-cols-2">
             <Card className="border-none shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Recent Activity</CardTitle>
-                <CardDescription className="text-xs">Your latest sessions and presentation topics.</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <div className="space-y-1">
+                  <CardTitle className="text-base">Recent Activity</CardTitle>
+                  <CardDescription className="text-xs">Your latest sessions and topics.</CardDescription>
+                </div>
+                <Button asChild variant="ghost" size="sm" className="h-8 text-[10px] font-bold uppercase tracking-wider">
+                  <Link href="/sessions?tab=history">View All</Link>
+                </Button>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
@@ -89,8 +100,8 @@ export default function DashboardPage() {
                         <p className="text-sm font-bold truncate max-w-[200px]">WK {log.week}: {log.presentationTopic || 'General Session'}</p>
                         <p className="text-[10px] text-muted-foreground">{log.date}</p>
                       </div>
-                      <Badge variant={log.paidAmount >= log.cost ? "secondary" : "destructive"} className="text-[9px]">
-                        {log.paidAmount >= log.cost ? 'Covered' : 'Balance Due'}
+                      <Badge variant={Number(log.paidAmount) >= Number(log.cost) ? "secondary" : "destructive"} className="text-[9px]">
+                        {Number(log.paidAmount) >= Number(log.cost) ? 'Covered' : 'Balance Due'}
                       </Badge>
                     </div>
                   ))}
@@ -123,6 +134,12 @@ export default function DashboardPage() {
                     <p className="text-xs font-bold text-red-700">You have a remaining balance of ${Math.abs(balance).toFixed(2)}</p>
                   </div>
                 )}
+                {balance >= 0 && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-emerald-500" />
+                    <p className="text-xs font-bold text-emerald-700">Account is current.</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </section>
@@ -131,3 +148,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

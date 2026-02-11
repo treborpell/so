@@ -1,7 +1,8 @@
 
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/layout/AppSidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { BrainCircuit, Sparkles, Loader2, ClipboardList, Table as TableIcon, PlusCircle, CheckCircle, Wallet, Presentation, AlertCircle, DollarSign } from "lucide-react"
+import { BrainCircuit, Sparkles, Loader2, ClipboardList, Table as TableIcon, PlusCircle, CheckCircle, Wallet, Presentation, AlertCircle, DollarSign, History } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { summarizeSession } from "@/ai/flows/summarize-session"
 import { useToast } from "@/hooks/use-toast"
@@ -27,11 +28,25 @@ export default function SOProgramLogPage() {
   const { user } = useUser()
   const db = useFirestore()
   const { toast } = useToast()
+  const searchParams = useSearchParams()
+  const router = useRouter()
 
-  const [activeTab, setActiveTab] = useState("new-entry")
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "new-entry")
   const [isSaving, setIsSaving] = useState(false)
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [aiInsight, setAiInsight] = useState<any>(null)
+
+  useEffect(() => {
+    const tab = searchParams.get("tab")
+    if (tab) setActiveTab(tab)
+  }, [searchParams])
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("tab", value)
+    router.replace(`/sessions?${params.toString()}`)
+  }
 
   const entriesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -99,7 +114,7 @@ export default function SOProgramLogPage() {
         checkNumber: ""
       })
       setAiInsight(null)
-      setActiveTab("history")
+      handleTabChange("history")
     } catch (error) {
       toast({ title: "Error", variant: "destructive" })
     } finally {
@@ -116,16 +131,21 @@ export default function SOProgramLogPage() {
             <SidebarTrigger />
             <h2 className="text-xl font-bold">SO Program Ledger</h2>
           </div>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="hidden sm:flex">
-            <TabsList className="bg-slate-100 rounded-full h-10 p-1">
-              <TabsTrigger value="new-entry" className="rounded-full text-xs font-bold px-6">New Entry</TabsTrigger>
-              <TabsTrigger value="history" className="rounded-full text-xs font-bold px-6">History</TabsTrigger>
-            </TabsList>
-          </Tabs>
         </header>
 
         <main className="p-4 sm:p-8">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="max-w-6xl mx-auto">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="max-w-6xl mx-auto">
+            <div className="mb-6 flex justify-center sm:justify-start">
+              <TabsList className="bg-slate-100 rounded-full h-12 p-1 w-full sm:w-auto">
+                <TabsTrigger value="new-entry" className="rounded-full text-xs font-bold px-8 flex-1 sm:flex-none">
+                  <PlusCircle className="h-4 w-4 mr-2" /> New Entry
+                </TabsTrigger>
+                <TabsTrigger value="history" className="rounded-full text-xs font-bold px-8 flex-1 sm:flex-none">
+                  <History className="h-4 w-4 mr-2" /> History
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
             <TabsContent value="new-entry" className="mt-0 space-y-8">
               <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white">
                 <CardHeader className="bg-primary text-primary-foreground p-10">
@@ -234,6 +254,13 @@ export default function SOProgramLogPage() {
                         <TableCell className="text-xs font-bold truncate max-w-[200px]">{entry.presentationTopic}</TableCell>
                       </TableRow>
                     ))}
+                    {(!recentEntries || recentEntries.length === 0) && !loadingEntries && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic">
+                          No history entries found. Go to "New Entry" to start logging.
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </Card>
