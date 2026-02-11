@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react"
@@ -9,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { BrainCircuit, Sparkles, Loader2, ClipboardList, Table as TableIcon, PlusCircle, CheckCircle, Wallet, Presentation } from "lucide-react"
+import { BrainCircuit, Sparkles, Loader2, ClipboardList, Table as TableIcon, PlusCircle, CheckCircle, Wallet, Presentation, AlertCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { summarizeSession } from "@/ai/flows/summarize-session"
 import { useToast } from "@/hooks/use-toast"
@@ -20,6 +21,7 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCollection, useMemoFirebase } from "@/firebase"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import Link from "next/link"
 
 export default function SOProgramLogPage() {
   const { user } = useUser()
@@ -31,13 +33,14 @@ export default function SOProgramLogPage() {
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [aiInsight, setAiInsight] = useState<any>(null)
 
-  // Fetch recent logs from the user-specific path with memoization
+  // Fetch entries from the user-specific path with memoization
+  // We sort by date descending. Note: if dates are not standardized, sorting will fail.
   const entriesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return query(
       collection(db, "users", user.uid, "so_entries"), 
-      orderBy("date", "desc"), // Ensure descending order (newest first)
-      limit(100)
+      orderBy("date", "desc"),
+      limit(200)
     );
   }, [db, user]);
   
@@ -81,7 +84,7 @@ export default function SOProgramLogPage() {
   }
 
   const handleSaveLog = async () => {
-    if (!user) {
+    if (!user || !db) {
       toast({ title: "Not Signed In", variant: "destructive" })
       return
     }
@@ -111,6 +114,9 @@ export default function SOProgramLogPage() {
       setIsSaving(false)
     }
   }
+
+  // Check if any dates look like they are in non-universal format
+  const hasLegacyDates = recentEntries?.some(entry => entry.date && !entry.date.includes('-'));
 
   return (
     <div className="flex min-h-screen bg-slate-50/50">
@@ -265,27 +271,25 @@ export default function SOProgramLogPage() {
                     </div>
                   </CardContent>
                 </Card>
-
-                {aiInsight && (
-                  <Card className="border-none bg-slate-900 text-white shadow-2xl rounded-[2.5rem] animate-in fade-in slide-in-from-bottom-5">
-                    <CardHeader className="p-10 border-b border-white/5">
-                      <CardTitle className="text-2xl font-black flex items-center gap-4">
-                        <BrainCircuit className="h-8 w-8 text-primary" />
-                        Clinical Synthesis
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-10 space-y-8">
-                      <div className="space-y-2">
-                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Synthesis</h4>
-                        <p className="text-xl font-bold leading-relaxed">{aiInsight.summary}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
               </div>
             </TabsContent>
 
             <TabsContent value="history" className="mt-0">
+               {hasLegacyDates && (
+                 <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                     <AlertCircle className="h-5 w-5 text-amber-500" />
+                     <div>
+                       <p className="text-sm font-bold text-amber-900">Sorting Issue Detected</p>
+                       <p className="text-xs text-amber-700">Some entries are using legacy date formats which prevent chronological sorting.</p>
+                     </div>
+                   </div>
+                   <Button asChild variant="outline" size="sm" className="rounded-full bg-white border-amber-200 hover:bg-amber-100">
+                     <Link href="/import">Fix Dates Now</Link>
+                   </Button>
+                 </div>
+               )}
+
                <Card className="border-none shadow-xl rounded-3xl bg-white overflow-hidden">
                 <CardHeader className="p-8 border-b">
                   <CardTitle className="text-2xl font-bold">Session History</CardTitle>
@@ -310,7 +314,7 @@ export default function SOProgramLogPage() {
                           <TableRow key={entry.id}>
                             <TableCell className="font-black text-primary">{entry.week}</TableCell>
                             <TableCell className="font-bold">{entry.sessionNumber}</TableCell>
-                            <TableCell className="text-xs">{entry.date}</TableCell>
+                            <TableCell className="text-xs font-mono">{entry.date}</TableCell>
                             <TableCell className="font-mono text-xs">${entry.cost?.toFixed(2)}</TableCell>
                             <TableCell>
                               {entry.paid ? (

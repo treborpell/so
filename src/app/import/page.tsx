@@ -26,7 +26,7 @@ export default function ImportPage() {
   const [importCount, setImportCount] = useState(0)
 
   const formatDateForStorage = (dateStr: string) => {
-    if (!dateStr || dateStr === "na") return "";
+    if (!dateStr || dateStr.toLowerCase() === "na" || dateStr.trim() === "") return "";
     
     // If it's already YYYY-MM-DD, return it
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
@@ -48,7 +48,7 @@ export default function ImportPage() {
   }
 
   const handleMigration = async () => {
-    if (!user) return;
+    if (!user || !db) return;
     setIsMigrating(true);
     let fixedCount = 0;
     
@@ -73,6 +73,7 @@ export default function ImportPage() {
         title: "Migration Complete",
         description: `Successfully standardized ${fixedCount} dates to universal format.`,
       });
+      router.push("/sessions");
     } catch (error: any) {
       toast({
         title: "Migration Failed",
@@ -151,7 +152,7 @@ export default function ImportPage() {
       return
     }
     
-    if (!user) {
+    if (!user || !db) {
       toast({ title: "Wait a moment", description: "Finalizing your secure session...", variant: "destructive" })
       return
     }
@@ -263,6 +264,9 @@ export default function ImportPage() {
                   <ClipboardPaste className="h-5 w-5" />
                   <h3>Paste New Rows (Including Headers)</h3>
                 </div>
+                <AlertCircle className="h-4 w-4 text-amber-500 inline mr-2" />
+                <span className="text-xs text-amber-700">Warning: Re-importing the same data will create duplicates. Use the "Fix" button above for existing data.</span>
+                
                 <Textarea 
                   placeholder="WK	#	DATE	Cost	Paid... (Copy from Excel and paste here)" 
                   className="min-h-[300px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs p-6 shadow-inner focus:bg-white transition-all"
@@ -287,13 +291,6 @@ export default function ImportPage() {
                       "Import Pasted Data"
                     )}
                   </Button>
-                )}
-
-                {!user && !authLoading && (
-                  <div className="flex items-center gap-2 p-4 bg-amber-50 rounded-xl text-amber-700 text-sm font-medium">
-                    <AlertCircle className="h-4 w-4" />
-                    <span>Background sign-in active. Your data is secure.</span>
-                  </div>
                 )}
               </CardContent>
             </Card>
