@@ -25,6 +25,7 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { useUser } from "@/firebase/auth/use-user"
 import { useAuth } from "@/firebase/provider"
@@ -47,10 +48,17 @@ export function AppSidebar() {
   const router = useRouter()
   const { user } = useUser()
   const auth = useAuth()
+  const { setOpenMobile, isMobile } = useSidebar()
 
   const handleSignOut = async () => {
     await signOut(auth)
     router.push("/login")
+  }
+
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setOpenMobile(false)
+    }
   }
 
   return (
@@ -73,7 +81,12 @@ export function AppSidebar() {
           <SidebarMenu>
             {mainNav.map((item) => (
               <SidebarMenuItem key={item.name}>
-                <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.name}>
+                <SidebarMenuButton 
+                  asChild 
+                  isActive={pathname === item.href} 
+                  tooltip={item.name}
+                  onClick={handleLinkClick}
+                >
                   <Link href={item.href} className="flex items-center gap-3 px-4 py-2.5">
                     <item.icon className="h-5 w-5" />
                     <span className="font-medium">{item.name}</span>
@@ -91,7 +104,12 @@ export function AppSidebar() {
           <SidebarMenu>
             {toolsNav.map((item) => (
               <SidebarMenuItem key={item.name}>
-                <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.name}>
+                <SidebarMenuButton 
+                  asChild 
+                  isActive={pathname === item.href} 
+                  tooltip={item.name}
+                  onClick={handleLinkClick}
+                >
                   <Link href={item.href} className="flex items-center gap-3 px-4 py-2.5">
                     <item.icon className="h-5 w-5" />
                     <span className="font-medium">{item.name}</span>
@@ -117,7 +135,7 @@ export function AppSidebar() {
             </SidebarMenuItem>
           ) : (
             <SidebarMenuItem>
-              <SidebarMenuButton asChild className="text-primary font-bold">
+              <SidebarMenuButton asChild className="text-primary font-bold" onClick={handleLinkClick}>
                 <Link href="/login">
                   <LogIn className="h-5 w-5" />
                   <span>Sign In</span>
