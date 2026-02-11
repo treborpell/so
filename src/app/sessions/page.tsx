@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState } from "react"
@@ -37,7 +36,7 @@ export default function SOProgramLogPage() {
     if (!db || !user) return null;
     return query(
       collection(db, "users", user.uid, "so_entries"), 
-      orderBy("date", "desc"), 
+      orderBy("date", "desc"), // Ensure descending order (newest first)
       limit(100)
     );
   }, [db, user]);
@@ -290,7 +289,7 @@ export default function SOProgramLogPage() {
                <Card className="border-none shadow-xl rounded-3xl bg-white overflow-hidden">
                 <CardHeader className="p-8 border-b">
                   <CardTitle className="text-2xl font-bold">Session History</CardTitle>
-                  <CardDescription>View your SO Program ledger in chronological order.</CardDescription>
+                  <CardDescription>View your SO Program ledger in descending order (newest first).</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                    <div className="overflow-x-auto">

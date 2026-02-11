@@ -1,14 +1,13 @@
-
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/layout/AppSidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { ClipboardPaste, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
+import { ClipboardPaste, Loader2, AlertCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore } from "@/firebase/provider"
 import { useUser } from "@/firebase/auth/use-user"
@@ -24,6 +23,24 @@ export default function ImportPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [importCount, setImportCount] = useState(0)
 
+  const formatDateForStorage = (dateStr: string) => {
+    if (!dateStr) return "";
+    // Handle M/D/YY or MM/DD/YYYY formats
+    const parts = dateStr.split('/');
+    if (parts.length !== 3) return dateStr;
+
+    let [m, d, y] = parts;
+    m = m.padStart(2, '0');
+    d = d.padStart(2, '0');
+    
+    // Handle 2-digit years
+    if (y.length === 2) {
+      y = `20${y}`;
+    }
+    
+    return `${y}-${m}-${d}`; // ISO 8601 format for correct Firestore sorting
+  }
+
   const parseData = (text: string) => {
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '')
     if (lines.length < 2) return []
@@ -38,7 +55,6 @@ export default function ImportPage() {
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(delimiter).map(v => v.trim().replace(/"/g, ''))
       
-      // Map based on the headers provided by the user
       const entry: any = {
         week: 0,
         sessionNumber: "0",
@@ -62,7 +78,7 @@ export default function ImportPage() {
         } else if (h === "#") {
           entry.sessionNumber = val || "0"
         } else if (h === "date") {
-          entry.date = val
+          entry.date = formatDateForStorage(val)
         } else if (h === "cost") {
           entry.cost = Number(val.replace(/[^0-9.-]+/g, "")) || 0
         } else if (h === "paid") {
