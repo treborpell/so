@@ -9,12 +9,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { ClipboardPaste, Loader2, AlertCircle, RefreshCw, CheckCircle2, Info, Trash2, FileSpreadsheet } from "lucide-react"
+import { Loader2, RefreshCw, CheckCircle2, Trash2, FileSpreadsheet } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore } from "@/firebase/provider"
 import { useUser } from "@/firebase/auth/use-user"
-import { addDoc, collection, getDocs, updateDoc, doc, query, where, limit, deleteDoc, writeBatch } from "firebase/firestore"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { addDoc, collection, getDocs, updateDoc, doc, query, where, limit, writeBatch } from "firebase/firestore"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 export default function ImportPage() {
@@ -26,15 +25,12 @@ export default function ImportPage() {
   const [pasteContent, setPasteContent] = useState("")
   const [isUploading, setIsUploading] = useState(false)
   const [isMigrating, setIsMigrating] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
   const [importStatus, setImportStatus] = useState({ current: 0, total: 0, mode: "" })
 
   const formatDateForStorage = (dateStr: string) => {
     if (!dateStr || dateStr.toLowerCase() === "na" || dateStr.trim() === "") return "";
-    // If already YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
     
-    // Attempt to parse M/D/Y or M-D-Y
     const parts = dateStr.split(/[-/]/);
     if (parts.length !== 3) return dateStr;
     
@@ -47,7 +43,6 @@ export default function ImportPage() {
 
   const handleDeleteAll = async () => {
     if (!user || !db) return;
-    setIsDeleting(true);
     try {
       const colRef = collection(db, "users", user.uid, "so_entries");
       const snapshot = await getDocs(colRef);
@@ -59,8 +54,6 @@ export default function ImportPage() {
       toast({ title: "Ledger Cleared", description: "All entries have been erased." });
     } catch (error: any) {
       toast({ title: "Delete Failed", description: error.message, variant: "destructive" });
-    } finally {
-      setIsDeleting(false);
     }
   }
 
@@ -118,44 +111,26 @@ export default function ImportPage() {
       headers.forEach((h, index) => {
         const val = values[index] || ""
         
-        // Week Detection
         if (h === "wk" || h === "week") entry.week = Number(val) || 0
-        
-        // Session Number Detection (handles 'x' for excused)
         else if (h === "#" || h === "session" || h === "no" || h === "session #" || h === "session no") {
           entry.sessionNumber = val || "0"
         }
-        
-        // Date Detection
         else if (h === "date") entry.date = formatDateForStorage(val)
-        
-        // Cost Detection
         else if (h === "cost" || h === "price" || h === "session cost") {
           entry.cost = Number(val.replace(/[^0-9.-]+/g, "")) || 0
         }
-        
-        // Paid Amount Detection
         else if (h === "paid" || h === "amount" || h === "paid amount" || h === "amt paid" || h === "$" || h === "payment") {
           entry.paidAmount = Number(val.replace(/[^0-9.-]+/g, "")) || 0
         }
-        
-        // Check Number Detection
         else if (h === "check #" || h === "check" || h === "check no") entry.checkNumber = val
-        
-        // Presentation Status Detection
         else if (h === "presented" || h === "pres" || h === "able to present" || h === "did present" || h === "presentation") {
-          const upper = val.toUpperCase();
+          const upper = val.toUpperCase().trim();
           entry.ableToPresent = ["YES", "TRUE", "1", "Y", "PRESENT", "T"].includes(upper);
         }
-        
-        // Topic Detection
         else if (h === "topic" || h === "presentation topic" || h === "subject") entry.presentationTopic = val
-        
-        // Notes Detection
         else if (h === "notes" || h === "session notes" || h === "clinical notes" || h === "note") entry.notes = val
       })
 
-      // Validation: Must have at least a week or a date to be a valid entry
       if (entry.week || entry.date) result.push(entry)
     }
     return result
@@ -180,7 +155,6 @@ export default function ImportPage() {
         count++
         setImportStatus(prev => ({ ...prev, current: count }))
         
-        // Upsert Logic: Check for existing Week + Date to prevent duplicates
         let existingDocId = null
         if (entry.week && entry.date) {
           const q = query(colRef, where("week", "==", entry.week), where("date", "==", entry.date), limit(1))
@@ -189,11 +163,9 @@ export default function ImportPage() {
         }
         
         if (existingDocId) {
-          // Update existing doc (don't overwrite aiInsight or createdAt)
-          const { createdAt, ...updateData } = entry
+          const { createdAt, aiInsight, ...updateData } = entry
           await updateDoc(doc(db, "users", user.uid, "so_entries", existingDocId), updateData)
         } else {
-          // Create new doc
           await addDoc(colRef, entry)
         }
       }
