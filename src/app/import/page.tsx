@@ -1,17 +1,18 @@
+
 "use client"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/layout/AppSidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { ClipboardPaste, Loader2, AlertCircle } from "lucide-react"
+import { ClipboardPaste, Loader2, AlertCircle, RefreshCw, CheckCircle2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore } from "@/firebase/provider"
 import { useUser } from "@/firebase/auth/use-user"
-import { addDoc, collection } from "firebase/firestore"
+import { addDoc, collection, getDocs, updateDoc, doc } from "firebase/firestore"
 
 export default function ImportPage() {
   const { user, loading: authLoading } = useUser()
@@ -21,12 +22,17 @@ export default function ImportPage() {
   
   const [pasteContent, setPasteContent] = useState("")
   const [isUploading, setIsUploading] = useState(false)
+  const [isMigrating, setIsMigrating] = useState(false)
   const [importCount, setImportCount] = useState(0)
 
   const formatDateForStorage = (dateStr: string) => {
-    if (!dateStr) return "";
+    if (!dateStr || dateStr === "na") return "";
+    
+    // If it's already YYYY-MM-DD, return it
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+
     // Handle M/D/YY or MM/DD/YYYY formats
-    const parts = dateStr.split('/');
+    const parts = dateStr.split(/[-/]/);
     if (parts.length !== 3) return dateStr;
 
     let [m, d, y] = parts;
@@ -41,11 +47,47 @@ export default function ImportPage() {
     return `${y}-${m}-${d}`; // ISO 8601 format for correct Firestore sorting
   }
 
+  const handleMigration = async () => {
+    if (!user) return;
+    setIsMigrating(true);
+    let fixedCount = 0;
+    
+    try {
+      const colRef = collection(db, "users", user.uid, "so_entries");
+      const snapshot = await getDocs(colRef);
+      
+      for (const entryDoc of snapshot.docs) {
+        const data = entryDoc.data();
+        const originalDate = data.date;
+        const standardizedDate = formatDateForStorage(originalDate);
+        
+        if (originalDate !== standardizedDate) {
+          await updateDoc(doc(db, "users", user.uid, "so_entries", entryDoc.id), {
+            date: standardizedDate
+          });
+          fixedCount++;
+        }
+      }
+      
+      toast({
+        title: "Migration Complete",
+        description: `Successfully standardized ${fixedCount} dates to universal format.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Migration Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setIsMigrating(false);
+    }
+  }
+
   const parseData = (text: string) => {
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '')
     if (lines.length < 2) return []
 
-    // Detect if tab or comma separated
     const firstLine = lines[0]
     const delimiter = firstLine.includes('\t') ? '\t' : ','
     
@@ -135,7 +177,7 @@ export default function ImportPage() {
 
       toast({
         title: "Import Successful",
-        description: `Processed ${count} session entries. Redirecting...`,
+        description: `Processed ${count} session entries.`,
       })
       
       setPasteContent("")
@@ -160,25 +202,70 @@ export default function ImportPage() {
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-white px-6 sticky top-0 z-10 shadow-sm">
           <SidebarTrigger />
-          <h2 className="text-xl font-bold">Import SO Program Ledger</h2>
+          <h2 className="text-xl font-bold">Data Management</h2>
         </header>
 
         <main className="p-6 max-w-4xl mx-auto w-full">
           <div className="space-y-8">
             <div className="space-y-2">
-              <h1 className="text-3xl font-bold tracking-tight">Sync Ledger</h1>
-              <p className="text-muted-foreground">Paste your rows directly from Excel. We'll handle the formatting.</p>
+              <h1 className="text-3xl font-bold tracking-tight">Sync & Standardize</h1>
+              <p className="text-muted-foreground">Manage your SO Program ledger data and ensure universal compatibility.</p>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card className="border-none shadow-sm bg-white">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <RefreshCw className="h-5 w-5 text-primary" />
+                    Universal Format Fix
+                  </CardTitle>
+                  <CardDescription>
+                    Scan your database and convert all dates to the universal YYYY-MM-DD standard for global timezone support.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    variant="outline" 
+                    className="w-full h-12 rounded-xl font-bold"
+                    onClick={handleMigration}
+                    disabled={isMigrating || !user}
+                  >
+                    {isMigrating ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Standardizing...</>
+                    ) : (
+                      "Fix Existing Date Formats"
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="border-none shadow-sm bg-white">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                    Data Health
+                  </CardTitle>
+                  <CardDescription>
+                    All new imports automatically use universal timestamps to support multiple timezones and perfect sorting.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xs font-mono p-3 bg-slate-50 rounded-lg text-slate-500">
+                    Format: YYYY-MM-DD (ISO 8601)
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white">
               <CardContent className="p-8 space-y-6">
                 <div className="flex items-center gap-2 text-primary font-bold mb-2">
                   <ClipboardPaste className="h-5 w-5" />
-                  <h3>Paste Rows (Including Headers)</h3>
+                  <h3>Paste New Rows (Including Headers)</h3>
                 </div>
                 <Textarea 
                   placeholder="WK	#	DATE	Cost	Paid... (Copy from Excel and paste here)" 
-                  className="min-h-[400px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs p-6 shadow-inner focus:bg-white transition-all"
+                  className="min-h-[300px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs p-6 shadow-inner focus:bg-white transition-all"
                   value={pasteContent}
                   onChange={(e) => setPasteContent(e.target.value)}
                   disabled={isUploading}
@@ -186,7 +273,7 @@ export default function ImportPage() {
                 
                 {authLoading ? (
                   <Button disabled className="w-full h-16 rounded-2xl font-black text-xl bg-slate-200">
-                    <Loader2 className="mr-3 h-6 w-6 animate-spin" /> Preparing Secure Storage...
+                    <Loader2 className="mr-3 h-6 w-6 animate-spin" /> Preparing Storage...
                   </Button>
                 ) : (
                   <Button 
@@ -197,7 +284,7 @@ export default function ImportPage() {
                     {isUploading ? (
                       <><Loader2 className="mr-3 h-6 w-6 animate-spin" /> Saving Row {importCount}...</>
                     ) : (
-                      "Import Ledger Data"
+                      "Import Pasted Data"
                     )}
                   </Button>
                 )}
@@ -205,7 +292,7 @@ export default function ImportPage() {
                 {!user && !authLoading && (
                   <div className="flex items-center gap-2 p-4 bg-amber-50 rounded-xl text-amber-700 text-sm font-medium">
                     <AlertCircle className="h-4 w-4" />
-                    <span>Signing you in anonymously to save your data...</span>
+                    <span>Background sign-in active. Your data is secure.</span>
                   </div>
                 )}
               </CardContent>
