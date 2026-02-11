@@ -22,6 +22,8 @@
         "date": { "type": "string", "format": "date" },
         "type": { "type": "string", "enum": ["Group", "Individual", "Psychoeducation", "Family", "Other"] },
         "topic": { "type": "string" },
+        "module": { "type": "string", "description": "Specific program module or stage" },
+        "facilitator": { "type": "string", "description": "Name of the counselor or group leader" },
         "participationScore": { "type": "number", "description": "1-10 scale" },
         "moodScore": { "type": "number", "description": "1-10 scale" },
         "notes": { "type": "string" },
