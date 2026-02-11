@@ -1,0 +1,51 @@
+
+{
+  "entities": {
+    "Patient": {
+      "title": "Patient",
+      "description": "Information about a patient in the therapy group.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "groupName": { "type": "string" },
+        "wellnessScore": { "type": "number", "description": "Latest emotional wellness score (0-100)" },
+        "totalSessions": { "type": "number" },
+        "lastSessionDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["active", "discharged", "on-hold"] }
+      },
+      "required": ["name", "groupName"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Details of a group therapy session.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "groupName": { "type": "string" },
+        "attendeeIds": { "type": "array", "items": { "type": "string" } },
+        "clinicalNotes": { "type": "string" },
+        "aiSummary": { "type": "string" },
+        "actionItems": { "type": "string" },
+        "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled"] }
+      },
+      "required": ["title", "date", "groupName"]
+    }
+  },
+  "auth": {
+    "providers": ["google.com", "password"]
+  },
+  "firestore": {
+    "/patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Collection of patient records."
+    },
+    "/sessions/{sessionId}": {
+      "schema": "Session",
+      "description": "Collection of therapy session logs."
+    }
+  }
+}

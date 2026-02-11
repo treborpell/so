@@ -1,98 +1,108 @@
+
+"use client"
+
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, CalendarDays, BrainCircuit, Activity } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
+import { Users, CalendarDays, BrainCircuit, Activity, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useCollection } from "@/firebase";
+import { collection, query, limit } from "firebase/firestore";
+import { useFirestore } from "@/firebase/provider";
 
 export default function DashboardPage() {
+  const db = useFirestore();
+  
+  const patientsQuery = query(collection(db, "patients"), limit(10));
+  const { data: patients } = useCollection(patientsQuery);
+  
+  const sessionsQuery = query(collection(db, "sessions"), limit(5));
+  const { data: sessions } = useCollection(sessionsQuery);
+
   const stats = [
-    { name: "Active Patients", value: "24", icon: Users, change: "+2 from last week", color: "bg-blue-100 text-blue-600" },
-    { name: "Weekly Sessions", value: "12", icon: CalendarDays, change: "On track", color: "bg-purple-100 text-purple-600" },
-    { name: "AI Summaries", value: "86", icon: BrainCircuit, change: "100% complete", color: "bg-emerald-100 text-emerald-600" },
-    { name: "Group Progress", value: "78%", icon: Activity, change: "+5% avg growth", color: "bg-amber-100 text-amber-600" },
+    { name: "Total Patients", value: patients?.length || "0", icon: Users, color: "bg-blue-100 text-blue-600" },
+    { name: "Active Sessions", value: sessions?.length || "0", icon: CalendarDays, color: "bg-purple-100 text-purple-600" },
+    { name: "Clinical Logs", value: "Locked", icon: BrainCircuit, color: "bg-emerald-100 text-emerald-600" },
+    { name: "Growth Rate", value: "82%", icon: Activity, color: "bg-amber-100 text-amber-600" },
   ];
 
   return (
     <div className="flex min-h-screen">
       <AppSidebar />
       <SidebarInset className="bg-background/50">
-        <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b bg-background/80 px-6 sticky top-0 z-10 backdrop-blur-md">
-          <div className="flex items-center gap-4">
+        <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b bg-background/80 px-4 sticky top-0 z-10 backdrop-blur-md">
+          <div className="flex items-center gap-2">
             <SidebarTrigger />
-            <h2 className="text-xl font-headline font-bold">Dashboard</h2>
+            <h2 className="text-lg font-bold">Clinical Log</h2>
           </div>
-          <div className="flex items-center gap-3">
-             <Button asChild variant="outline" size="sm" className="rounded-full">
-                <Link href="/import">Import Spreadsheet</Link>
-             </Button>
-             <Button size="sm" className="rounded-full shadow-lg shadow-primary/20">
-                New Session
+          <div className="flex items-center gap-2">
+             <Button asChild size="sm" className="rounded-full shadow-lg h-10 px-4">
+                <Link href="/sessions/new">
+                  <Plus className="h-4 w-4 mr-2" /> <span className="hidden sm:inline">New Session</span>
+                </Link>
              </Button>
           </div>
         </header>
 
-        <main className="flex-1 p-6 space-y-8">
-          <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <main className="flex-1 p-4 space-y-6">
+          <section className="grid gap-4 grid-cols-2 lg:grid-cols-4">
             {stats.map((stat) => (
-              <Card key={stat.name} className="border-none shadow-sm hover:shadow-md transition-shadow duration-300">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={`p-2 rounded-xl ${stat.color}`}>
-                      <stat.icon className="h-5 w-5" />
-                    </div>
+              <Card key={stat.name} className="border-none shadow-sm touch-manipulation">
+                <CardContent className="p-4">
+                  <div className={`p-2 rounded-lg w-fit ${stat.color} mb-2`}>
+                    <stat.icon className="h-5 w-5" />
                   </div>
-                  <div className="space-y-1">
-                    <h3 className="text-2xl font-bold">{stat.value}</h3>
-                    <p className="text-sm font-medium text-muted-foreground">{stat.name}</p>
-                    <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-tight">{stat.change}</p>
+                  <div className="space-y-0.5">
+                    <h3 className="text-xl font-bold">{stat.value}</h3>
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wide">{stat.name}</p>
                   </div>
                 </CardContent>
               </Card>
-            ))}Section
+            ))}
           </section>
 
-          <section className="grid gap-6 md:grid-cols-7">
-            <Card className="md:col-span-4 border-none shadow-sm overflow-hidden">
-              <CardHeader className="bg-white/50 border-b">
-                <CardTitle>Recent Group Progress</CardTitle>
-                <CardDescription>Aggregate emotional well-being scores across all active groups.</CardDescription>
+          <section className="grid gap-4 md:grid-cols-2">
+            <Card className="border-none shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Recent Activity</CardTitle>
+                <CardDescription className="text-xs">Quick view of your clinical spreadsheet logs.</CardDescription>
               </CardHeader>
-              <CardContent className="p-0 flex items-center justify-center min-h-[300px] bg-slate-50/50">
-                <div className="text-center p-8">
-                   <div className="w-64 h-2 bg-slate-200 rounded-full mb-4 overflow-hidden">
-                     <div className="w-3/4 h-full bg-primary" />
-                   </div>
-                   <p className="text-muted-foreground text-sm">Visualize your session data here after importing your spreadsheet.</p>
+              <CardContent>
+                <div className="space-y-3">
+                  {sessions?.map((session: any) => (
+                    <div key={session.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-bold">{session.title}</p>
+                        <p className="text-[10px] text-muted-foreground">{session.date}</p>
+                      </div>
+                      <Button variant="ghost" size="sm" className="h-8 text-[10px]" asChild>
+                        <Link href={`/sessions/${session.id}`}>View</Link>
+                      </Button>
+                    </div>
+                  ))}
+                  {(!sessions || sessions.length === 0) && (
+                    <div className="text-center py-8 text-muted-foreground text-xs">
+                      No logs found. Start by adding a session.
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="md:col-span-3 border-none shadow-sm">
-              <CardHeader>
-                <CardTitle>Upcoming Sessions</CardTitle>
-                <CardDescription>Sessions scheduled for the next 48 hours.</CardDescription>
+            <Card className="border-none shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Patient Overview</CardTitle>
+                <CardDescription className="text-xs">Aggregate data from your imported logs.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  { title: "Anxiety Management A", time: "Today, 2:00 PM", status: "Ready" },
-                  { title: "Social Integration Group", time: "Today, 4:30 PM", status: "Needs Prep" },
-                  { title: "PTSD Support Round", time: "Tomorrow, 10:00 AM", status: "Ready" },
-                ].map((session, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-primary/30 transition-colors">
-                    <div className="space-y-1">
-                      <p className="text-sm font-bold">{session.title}</p>
-                      <p className="text-xs text-muted-foreground">{session.time}</p>
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${session.status === 'Ready' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {session.status}
-                    </span>
-                  </div>
-                ))}
-                <Button variant="ghost" className="w-full text-xs font-semibold text-primary" asChild>
-                  <Link href="/sessions">View Calendar</Link>
-                </Button>
+              <CardContent className="flex flex-col items-center justify-center min-h-[160px]">
+                  <Activity className="h-12 w-12 text-primary/20 mb-2" />
+                  <p className="text-xs text-muted-foreground text-center px-4">
+                    Visualize your group progress scores here after syncing with your spreadsheet.
+                  </p>
+                  <Button variant="outline" size="sm" className="mt-4 rounded-full" asChild>
+                    <Link href="/import">Sync Logs</Link>
+                  </Button>
               </CardContent>
             </Card>
           </section>
