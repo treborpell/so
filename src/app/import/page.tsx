@@ -27,40 +27,27 @@ export default function ImportPage() {
 
   const formatDateForStorage = (dateStr: string) => {
     if (!dateStr || dateStr.toLowerCase() === "na" || dateStr.trim() === "") return "";
-    
-    // If it's already YYYY-MM-DD, return it
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-
-    // Handle M/D/YY or MM/DD/YYYY formats
     const parts = dateStr.split(/[-/]/);
     if (parts.length !== 3) return dateStr;
-
     let [m, d, y] = parts;
     m = m.padStart(2, '0');
     d = d.padStart(2, '0');
-    
-    // Handle 2-digit years
-    if (y.length === 2) {
-      y = `20${y}`;
-    }
-    
-    return `${y}-${m}-${d}`; // ISO 8601 format for correct Firestore sorting
+    if (y.length === 2) y = `20${y}`;
+    return `${y}-${m}-${d}`;
   }
 
   const handleMigration = async () => {
     if (!user || !db) return;
     setIsMigrating(true);
     let fixedCount = 0;
-    
     try {
       const colRef = collection(db, "users", user.uid, "so_entries");
       const snapshot = await getDocs(colRef);
-      
       for (const entryDoc of snapshot.docs) {
         const data = entryDoc.data();
         const originalDate = data.date;
         const standardizedDate = formatDateForStorage(originalDate);
-        
         if (originalDate !== standardizedDate) {
           await updateDoc(doc(db, "users", user.uid, "so_entries", entryDoc.id), {
             date: standardizedDate
@@ -68,18 +55,10 @@ export default function ImportPage() {
           fixedCount++;
         }
       }
-      
-      toast({
-        title: "Migration Complete",
-        description: `Successfully standardized ${fixedCount} dates to universal format.`,
-      });
+      toast({ title: "Migration Complete", description: `Successfully standardized ${fixedCount} dates.` });
       router.push("/sessions");
     } catch (error: any) {
-      toast({
-        title: "Migration Failed",
-        description: error.message,
-        variant: "destructive"
-      });
+      toast({ title: "Migration Failed", description: error.message, variant: "destructive" });
     } finally {
       setIsMigrating(false);
     }
@@ -88,22 +67,18 @@ export default function ImportPage() {
   const parseData = (text: string) => {
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '')
     if (lines.length < 2) return []
-
     const firstLine = lines[0]
     const delimiter = firstLine.includes('\t') ? '\t' : ','
-    
     const headers = firstLine.split(delimiter).map(h => h.trim().replace(/"/g, ''))
     const result = []
-
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(delimiter).map(v => v.trim().replace(/"/g, ''))
-      
       const entry: any = {
         week: 0,
         sessionNumber: "0",
         date: "",
         cost: 0,
-        paid: false,
+        paidAmount: 0,
         checkNumber: "",
         ableToPresent: false,
         presentationTopic: "",
@@ -111,88 +86,51 @@ export default function ImportPage() {
         aiInsight: "",
         createdAt: new Date().toISOString()
       }
-      
       headers.forEach((header, index) => {
         const val = values[index] || ""
         const h = header.toLowerCase().trim()
-        
-        if (h === "wk") {
-          entry.week = Number(val) || 0
-        } else if (h === "#") {
-          entry.sessionNumber = val || "0"
-        } else if (h === "date") {
-          entry.date = formatDateForStorage(val)
-        } else if (h === "cost") {
-          entry.cost = Number(val.replace(/[^0-9.-]+/g, "")) || 0
-        } else if (h === "paid") {
-          const cleanVal = val.replace(/[^0-9.-]+/g, "")
-          const paidAmount = Number(cleanVal) || 0
-          entry.paid = paidAmount > 0 || ["YES", "TRUE", "1", "PAID"].includes(val.toUpperCase())
-        } else if (h === "check #") {
-          entry.checkNumber = val
-        } else if (h === "able to present") {
-          entry.ableToPresent = ["YES", "TRUE", "1"].includes(val.toUpperCase())
-        } else if (h === "presentation topic") {
-          entry.presentationTopic = val
-        } else if (h === "notes") {
-          entry.notes = val
-        }
+        if (h === "wk") entry.week = Number(val) || 0
+        else if (h === "#") entry.sessionNumber = val || "0"
+        else if (h === "date") entry.date = formatDateForStorage(val)
+        else if (h === "cost") entry.cost = Number(val.replace(/[^0-9.-]+/g, "")) || 0
+        else if (h === "paid") entry.paidAmount = Number(val.replace(/[^0-9.-]+/g, "")) || 0
+        else if (h === "check #") entry.checkNumber = val
+        else if (h === "able to present") entry.ableToPresent = ["YES", "TRUE", "1"].includes(val.toUpperCase())
+        else if (h === "presentation topic") entry.presentationTopic = val
+        else if (h === "notes") entry.notes = val
       })
-      
-      if (entry.week || entry.date) {
-        result.push(entry)
-      }
+      if (entry.week || entry.date) result.push(entry)
     }
     return result
   }
 
   const handleProcessImport = async () => {
-    if (!pasteContent || pasteContent.trim() === "") {
-      toast({ title: "No data", description: "Please paste your spreadsheet rows first.", variant: "destructive" })
+    if (!pasteContent.trim()) {
+      toast({ title: "No data", description: "Please paste your rows first.", variant: "destructive" })
       return
     }
-    
     if (!user || !db) {
-      toast({ title: "Wait a moment", description: "Finalizing your secure session...", variant: "destructive" })
+      toast({ title: "Auth Required", description: "Please sign in first.", variant: "destructive" })
       return
     }
-    
     setIsUploading(true)
     setImportCount(0)
-    
     try {
       const entries = parseData(pasteContent)
-      
-      if (entries.length === 0) {
-        throw new Error("No valid data found. Ensure headers match: WK, #, DATE, Cost, Paid, Notes.")
-      }
-
+      if (entries.length === 0) throw new Error("No valid data found.")
       const colRef = collection(db, "users", user.uid, "so_entries")
-      
       let count = 0
       for (const entry of entries) {
         await addDoc(colRef, entry)
         count++
         setImportCount(count)
       }
-
-      toast({
-        title: "Import Successful",
-        description: `Processed ${count} session entries.`,
-      })
-      
+      toast({ title: "Import Successful", description: `Processed ${count} entries.` })
       setPasteContent("")
-      setTimeout(() => {
-        setIsUploading(false)
-        router.push("/sessions")
-      }, 1000)
-      
+      router.push("/sessions")
     } catch (error: any) {
-      toast({
-        title: "Import Failed",
-        description: error.message || "Check your formatting and try again.",
-        variant: "destructive"
-      })
+      toast({ title: "Import Failed", description: error.message, variant: "destructive" })
+    } finally {
       setIsUploading(false)
     }
   }
@@ -205,93 +143,43 @@ export default function ImportPage() {
           <SidebarTrigger />
           <h2 className="text-xl font-bold">Data Management</h2>
         </header>
-
         <main className="p-6 max-w-4xl mx-auto w-full">
           <div className="space-y-8">
             <div className="space-y-2">
-              <h1 className="text-3xl font-bold tracking-tight">Sync & Standardize</h1>
-              <p className="text-muted-foreground">Manage your SO Program ledger data and ensure universal compatibility.</p>
+              <h1 className="text-3xl font-bold tracking-tight">Financial & Date Sync</h1>
+              <p className="text-muted-foreground">Import your Excel ledger and ensure your balance tracking is accurate.</p>
             </div>
-
             <div className="grid gap-6 md:grid-cols-2">
               <Card className="border-none shadow-sm bg-white">
                 <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <RefreshCw className="h-5 w-5 text-primary" />
-                    Universal Format Fix
-                  </CardTitle>
-                  <CardDescription>
-                    Scan your database and convert all dates to the universal YYYY-MM-DD standard for global timezone support.
-                  </CardDescription>
+                  <CardTitle className="text-lg flex items-center gap-2"><RefreshCw className="h-5 w-5 text-primary" />Format Fixer</CardTitle>
+                  <CardDescription>Standardize dates for perfect chronological sorting.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button 
-                    variant="outline" 
-                    className="w-full h-12 rounded-xl font-bold"
-                    onClick={handleMigration}
-                    disabled={isMigrating || !user}
-                  >
-                    {isMigrating ? (
-                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Standardizing...</>
-                    ) : (
-                      "Fix Existing Date Formats"
-                    )}
+                  <Button variant="outline" className="w-full h-12 rounded-xl font-bold" onClick={handleMigration} disabled={isMigrating}>
+                    {isMigrating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Fix Existing Dates"}
                   </Button>
                 </CardContent>
               </Card>
-
-              <Card className="border-none shadow-sm bg-white">
+              <Card className="border-none shadow-sm bg-emerald-50/30">
                 <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                    Data Health
-                  </CardTitle>
-                  <CardDescription>
-                    All new imports automatically use universal timestamps to support multiple timezones and perfect sorting.
-                  </CardDescription>
+                  <CardTitle className="text-lg flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-500" />Financial Ready</CardTitle>
+                  <CardDescription>Imports now track actual dollar amounts paid versus session costs.</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-xs font-mono p-3 bg-slate-50 rounded-lg text-slate-500">
-                    Format: YYYY-MM-DD (ISO 8601)
-                  </div>
-                </CardContent>
               </Card>
             </div>
-
             <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white">
               <CardContent className="p-8 space-y-6">
-                <div className="flex items-center gap-2 text-primary font-bold mb-2">
-                  <ClipboardPaste className="h-5 w-5" />
-                  <h3>Paste New Rows (Including Headers)</h3>
-                </div>
-                <AlertCircle className="h-4 w-4 text-amber-500 inline mr-2" />
-                <span className="text-xs text-amber-700">Warning: Re-importing the same data will create duplicates. Use the "Fix" button above for existing data.</span>
-                
                 <Textarea 
-                  placeholder="WK	#	DATE	Cost	Paid... (Copy from Excel and paste here)" 
-                  className="min-h-[300px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs p-6 shadow-inner focus:bg-white transition-all"
+                  placeholder="Paste Excel rows here (Include headers: WK, #, DATE, Cost, Paid...)" 
+                  className="min-h-[300px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs p-6 shadow-inner"
                   value={pasteContent}
                   onChange={(e) => setPasteContent(e.target.value)}
                   disabled={isUploading}
                 />
-                
-                {authLoading ? (
-                  <Button disabled className="w-full h-16 rounded-2xl font-black text-xl bg-slate-200">
-                    <Loader2 className="mr-3 h-6 w-6 animate-spin" /> Preparing Storage...
-                  </Button>
-                ) : (
-                  <Button 
-                    className="w-full h-16 rounded-2xl font-black text-xl shadow-xl transition-all active:scale-95"
-                    disabled={!pasteContent || isUploading}
-                    onClick={handleProcessImport}
-                  >
-                    {isUploading ? (
-                      <><Loader2 className="mr-3 h-6 w-6 animate-spin" /> Saving Row {importCount}...</>
-                    ) : (
-                      "Import Pasted Data"
-                    )}
-                  </Button>
-                )}
+                <Button className="w-full h-16 rounded-2xl font-black text-xl" disabled={!pasteContent || isUploading} onClick={handleProcessImport}>
+                  {isUploading ? <><Loader2 className="mr-3 h-6 w-6 animate-spin" /> Row {importCount}...</> : "Import Pasted Data"}
+                </Button>
               </CardContent>
             </Card>
           </div>

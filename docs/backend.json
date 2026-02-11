@@ -10,7 +10,7 @@
         "sessionNumber": { "type": "string", "description": "The session identifier (can be a number or 'x' for excused)." },
         "date": { "type": "string", "format": "date", "description": "The date of the session." },
         "cost": { "type": "number", "description": "The cost of the session." },
-        "paid": { "type": "boolean", "description": "Whether the session has been paid for." },
+        "paidAmount": { "type": "number", "description": "The amount paid during this session entry." },
         "checkNumber": { "type": "string", "description": "The check number used for payment, if applicable." },
         "ableToPresent": { "type": "boolean", "description": "Whether the user was able to present during the session." },
         "presentationTopic": { "type": "string", "description": "The topic presented during the session." },
