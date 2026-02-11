@@ -13,26 +13,28 @@
         "joinedDate": { "type": "string", "format": "date" }
       }
     },
-    "SessionLog": {
-      "title": "Session Log",
-      "description": "Detailed log for therapy sessions (Group, Individual, etc.) based on program tracking requirements.",
+    "SOProgramEntry": {
+      "title": "SO Program Entry",
+      "description": "A single entry in the SO Program log, mapping exactly to spreadsheet columns.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "week": { "type": "number", "description": "WK column" },
+        "sessionNumber": { "type": "number", "description": "# column" },
         "date": { "type": "string", "format": "date" },
-        "type": { "type": "string", "enum": ["Group", "Individual", "Psychoeducation", "Family", "Other"] },
-        "module": { "type": "string", "description": "Specific program module or stage" },
-        "facilitator": { "type": "string", "description": "Name of the counselor or group leader" },
-        "topic": { "type": "string" },
-        "goal": { "type": "string", "description": "Specific behavioral or therapeutic goal for this session" },
-        "participationScore": { "type": "number", "description": "1-10 scale" },
-        "moodScore": { "type": "number", "description": "1-10 scale" },
+        "cost": { "type": "number" },
+        "paid": { "type": "boolean" },
+        "checkNumber": { "type": "string" },
+        "ableToPresent": { "type": "boolean" },
+        "presentationTopic": { "type": "string" },
         "notes": { "type": "string" },
-        "homeworkAssigned": { "type": "string" },
-        "homeworkStatus": { "type": "string", "enum": ["N/A", "Completed", "Partial", "Not Started"] },
+        "receipt": { "type": "string", "description": "Receipt reference or link" },
+        "attachment1": { "type": "string" },
+        "attachment2": { "type": "string" },
+        "attachment3": { "type": "string" },
         "aiInsight": { "type": "string" }
       },
-      "required": ["date", "type", "topic", "notes"]
+      "required": ["week", "sessionNumber", "date", "presentationTopic"]
     },
     "Assignment": {
       "title": "Therapy Assignment",
@@ -56,9 +58,9 @@
       "schema": "Profile",
       "description": "Individual user settings and stats."
     },
-    "/profiles/{userId}/sessions/{sessionId}": {
-      "schema": "SessionLog",
-      "description": "Individual logs of therapy sessions attended."
+    "/profiles/{userId}/so_entries/{entryId}": {
+      "schema": "SOProgramEntry",
+      "description": "Specific log entries for the SO Program."
     },
     "/profiles/{userId}/assignments/{assignmentId}": {
       "schema": "Assignment",

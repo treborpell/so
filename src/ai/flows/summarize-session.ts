@@ -1,4 +1,3 @@
-// Summarize key discussion points and action items from group therapy sessions.
 
 'use server';
 
@@ -29,16 +28,16 @@ const summarizeSessionPrompt = ai.definePrompt({
   name: 'summarizeSessionPrompt',
   input: {schema: SummarizeSessionInputSchema},
   output: {schema: SummarizeSessionOutputSchema},
-  prompt: `You are an AI assistant for a therapist who leads group therapy sessions. Your goal is to summarize the sessions so the therapist can quickly review highlights and track progress.
+  prompt: `You are an AI assistant for a user tracking their progress in an "SO Program."
 
-  Analyze the session details provided below:
+  Analyze the following ledger entry and session notes:
   {{sessionDetails}}
 
-  Based on the details, provide a summary of the key discussion points and a list of action items.
+  Provide:
+  1. A "Clinical Synthesis": A bold, concise summary of the session's core breakthrough or theme.
+  2. "Focus Areas": Specific items for the user to work on before the next session.
 
-  If the session details are insufficient to create a valid summary, set the isValidSummary output field to false.
-
-  Otherwise, set it to true.
+  If the notes are too sparse to provide a meaningful synthesis, set isValidSummary to false.
   `,
 });
 
