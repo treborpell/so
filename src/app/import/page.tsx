@@ -25,10 +25,11 @@ export default function ImportPage() {
   const [importCount, setImportCount] = useState(0)
 
   const parseData = (text: string) => {
+    // Split by line and filter out purely empty lines
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '')
     if (lines.length < 2) return []
 
-    // Detect delimiter: tab or comma
+    // Detect delimiter: prioritize tabs for Excel paste, fallback to comma
     const firstLine = lines[0]
     const delimiter = firstLine.includes('\t') ? '\t' : ','
     
@@ -37,28 +38,59 @@ export default function ImportPage() {
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(delimiter).map(v => v.trim().replace(/"/g, ''))
-      const entry: any = {}
+      const entry: any = {
+        week: 0,
+        sessionNumber: "0",
+        date: "",
+        cost: 0,
+        paid: false,
+        checkNumber: "",
+        ableToPresent: false,
+        presentationTopic: "",
+        notes: "",
+        receipt: "",
+        attachment1: "",
+        attachment2: "",
+        attachment3: ""
+      }
       
       headers.forEach((header, index) => {
         const val = values[index] || ""
         const h = header.toUpperCase().trim()
         
-        if (h === "WK") entry.week = Number(val) || 0
-        else if (h === "#") entry.sessionNumber = val || "0"
-        else if (h === "DATE") entry.date = val
-        else if (h === "COST") entry.cost = Number(val.replace(/[^0-9.-]+/g, "")) || 0
-        else if (h === "PAID") {
-           const cleanVal = val.replace(/[^0-9.-]+/g, "")
-           const paidAmount = Number(cleanVal) || 0
-           entry.paid = paidAmount > 0 || ["YES", "TRUE", "1"].includes(val.toUpperCase())
+        if (h === "WK") {
+          entry.week = Number(val) || 0
+        } else if (h === "#") {
+          entry.sessionNumber = val || "0"
+        } else if (h === "DATE") {
+          entry.date = val
+        } else if (h === "COST") {
+          entry.cost = Number(val.replace(/[^0-9.-]+/g, "")) || 0
+        } else if (h === "PAID") {
+          const cleanVal = val.replace(/[^0-9.-]+/g, "")
+          const paidAmount = Number(cleanVal) || 0
+          // If it's a number > 0, or literally "yes", "true", etc.
+          entry.paid = paidAmount > 0 || ["YES", "TRUE", "1", "PAID"].includes(val.toUpperCase())
+        } else if (h === "CHECK #") {
+          entry.checkNumber = val
+        } else if (h === "ABLE TO PRESENT") {
+          entry.ableToPresent = ["YES", "TRUE", "1"].includes(val.toUpperCase())
+        } else if (h === "PRESENTATION TOPIC") {
+          entry.presentationTopic = val
+        } else if (h === "NOTES") {
+          entry.notes = val
+        } else if (h === "RECEIPT") {
+          entry.receipt = val
+        } else if (h === "ATTACHMENT 1") {
+          entry.attachment1 = val
+        } else if (h === "ATTACHMENT 2") {
+          entry.attachment2 = val
+        } else if (h === "ATTACHMENT 3") {
+          entry.attachment3 = val
         }
-        else if (h === "CHECK #") entry.checkNumber = val
-        else if (h === "ABLE TO PRESENT") entry.ableToPresent = ["YES", "TRUE", "1"].includes(val.toUpperCase())
-        else if (h === "PRESENTATION TOPIC") entry.presentationTopic = val
-        else if (h === "NOTES") entry.notes = val
-        else if (h === "RECEIPT") entry.receipt = val
       })
       
+      // Filter out rows that don't at least have a week or date
       if (entry.week || entry.date) {
         result.push(entry)
       }
@@ -67,41 +99,71 @@ export default function ImportPage() {
   }
 
   const handleProcessImport = async (textSource: string) => {
-    if (!textSource || !user) return
+    if (!textSource) {
+      toast({ title: "No data", description: "Please paste some data first.", variant: "destructive" })
+      return
+    }
+    
+    if (!user) {
+      toast({ title: "Authentication required", description: "You must be signed in to import data.", variant: "destructive" })
+      return
+    }
     
     setIsUploading(true)
+    setImportCount(0)
+    
     try {
       const entries = parseData(textSource)
       
       if (entries.length === 0) {
-        throw new Error("No valid data found. Ensure headers match: WK, #, DATE, Cost, Paid, etc.")
-      }
-
-      let count = 0
-      for (const entry of entries) {
-        addDoc(collection(db, "profiles", user.uid, "so_entries"), {
-          ...entry,
-          createdAt: new Date().toISOString(),
-          aiInsight: ""
-        })
-        count++
-        setImportCount(count)
+        throw new Error("No valid data found. Ensure headers match: WK, #, DATE, Cost, Paid, Notes.")
       }
 
       toast({
         title: "Importing...",
-        description: `Adding ${count} ledger entries to your record.`,
+        description: `Preparing to add ${entries.length} entries to your ledger.`,
       })
+
+      const colRef = collection(db, "profiles", user.uid, "so_entries")
+      
+      let count = 0
+      for (const entry of entries) {
+        // We trigger the writes. Per guidelines, we don't block on every single addDoc 
+        // to maintain responsiveness, but we'll use a small timeout to let the UI update the count.
+        addDoc(colRef, {
+          ...entry,
+          createdAt: new Date().toISOString(),
+          aiInsight: ""
+        })
+        
+        count++
+        setImportCount(count)
+        
+        // Brief pause to allow React to render the counter update
+        if (count % 10 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 50))
+        }
+      }
+
+      toast({
+        title: "Import Successful",
+        description: `Successfully processed ${count} ledger entries.`,
+      })
+      
       setFile(null)
       setPasteContent("")
-      setImportCount(0)
+      // Give it a moment before closing the loading state so user sees 100% completion
+      setTimeout(() => {
+        setIsUploading(false)
+        setImportCount(0)
+      }, 1000)
+      
     } catch (error: any) {
       toast({
         title: "Import Failed",
         description: error.message || "An error occurred during import.",
         variant: "destructive"
       })
-    } finally {
       setIsUploading(false)
     }
   }
@@ -140,6 +202,7 @@ export default function ImportPage() {
                       className="min-h-[300px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs"
                       value={pasteContent}
                       onChange={(e) => setPasteContent(e.target.value)}
+                      disabled={isUploading}
                     />
                     <Button 
                       className="w-full h-14 rounded-2xl font-black text-lg shadow-lg"
@@ -193,7 +256,11 @@ export default function ImportPage() {
                             disabled={isUploading} 
                             className="shadow-lg rounded-xl"
                           >
-                            Start File Import
+                            {isUploading ? (
+                              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {importCount}...</>
+                            ) : (
+                              "Start File Import"
+                            )}
                           </Button>
                         </div>
                       </div>
