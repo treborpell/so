@@ -4,7 +4,7 @@
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, Wallet, Heart, Sparkles, Plus, AlertCircle, History, CheckCircle } from "lucide-react";
+import { BookOpen, Wallet, Heart, Sparkles, Plus, AlertCircle, History, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useCollection, useMemoFirebase } from "@/firebase";
@@ -136,7 +136,7 @@ export default function DashboardPage() {
                 )}
                 {balance >= 0 && (
                   <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-emerald-500" />
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                     <p className="text-xs font-bold text-emerald-700">Account is current.</p>
                   </div>
                 )}
@@ -148,4 +148,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

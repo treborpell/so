@@ -8,15 +8,16 @@ import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { ClipboardPaste, Loader2, AlertCircle, RefreshCw, CheckCircle2, Info } from "lucide-react"
+import { ClipboardPaste, Loader2, AlertCircle, RefreshCw, CheckCircle2, Info, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore } from "@/firebase/provider"
 import { useUser } from "@/firebase/auth/use-user"
-import { addDoc, collection, getDocs, updateDoc, doc, query, where, limit } from "firebase/firestore"
+import { addDoc, collection, getDocs, updateDoc, doc, query, where, limit, deleteDoc, writeBatch } from "firebase/firestore"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 export default function ImportPage() {
-  const { user, loading: authLoading } = useUser()
+  const { user } = useUser()
   const db = useFirestore()
   const { toast } = useToast()
   const router = useRouter()
@@ -24,23 +25,38 @@ export default function ImportPage() {
   const [pasteContent, setPasteContent] = useState("")
   const [isUploading, setIsUploading] = useState(false)
   const [isMigrating, setIsMigrating] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [importStatus, setImportStatus] = useState({ current: 0, total: 0, mode: "" })
 
   const formatDateForStorage = (dateStr: string) => {
     if (!dateStr || dateStr.toLowerCase() === "na" || dateStr.trim() === "") return "";
-    
-    // Handle YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-    
-    // Handle MM/DD/YY or MM-DD-YY
     const parts = dateStr.split(/[-/]/);
     if (parts.length !== 3) return dateStr;
-    
     let [m, d, y] = parts;
     m = m.padStart(2, '0');
     d = d.padStart(2, '0');
     if (y.length === 2) y = `20${y}`;
     return `${y}-${m}-${d}`;
+  }
+
+  const handleDeleteAll = async () => {
+    if (!user || !db) return;
+    setIsDeleting(true);
+    try {
+      const colRef = collection(db, "users", user.uid, "so_entries");
+      const snapshot = await getDocs(colRef);
+      const batch = writeBatch(db);
+      snapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      toast({ title: "Ledger Cleared", description: "All entries have been erased." });
+    } catch (error: any) {
+      toast({ title: "Delete Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   const handleMigration = async () => {
@@ -72,11 +88,7 @@ export default function ImportPage() {
 
   const parseData = (text: string) => {
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '')
-    if (lines.length < 2) {
-      // If no headers, maybe user just pasted one column? 
-      // But we need context. We'll assume first line is headers if it has non-numeric chars.
-      return []
-    }
+    if (lines.length < 2) return []
     const firstLine = lines[0]
     const delimiter = firstLine.includes('\t') ? '\t' : ','
     const headers = firstLine.split(delimiter).map(h => h.trim().replace(/"/g, ''))
@@ -101,8 +113,6 @@ export default function ImportPage() {
       headers.forEach((header, index) => {
         const val = values[index] || ""
         const h = header.toLowerCase().trim()
-        
-        // Flexible Header Matching
         if (h === "wk" || h === "week") entry.week = Number(val) || 0
         else if (h === "#" || h === "session" || h === "no") entry.sessionNumber = val || "0"
         else if (h === "date") entry.date = formatDateForStorage(val)
@@ -111,73 +121,52 @@ export default function ImportPage() {
           entry.paidAmount = Number(val.replace(/[^0-9.-]+/g, "")) || 0
         }
         else if (h === "check #" || h === "check") entry.checkNumber = val
-        else if (h === "able to present" || h === "presented") entry.ableToPresent = ["YES", "TRUE", "1", "Y"].includes(val.toUpperCase())
-        else if (h === "presentation topic" || h === "topic") entry.presentationTopic = val
+        else if (h === "presented") entry.ableToPresent = ["YES", "TRUE", "1", "Y"].includes(val.toUpperCase())
+        else if (h === "topic") entry.presentationTopic = val
         else if (h === "notes") entry.notes = val
       })
-
-      // Only import if we have at least a week or a date to identify it
       if (entry.week || entry.date) result.push(entry)
     }
     return result
   }
 
   const handleProcessImport = async () => {
-    if (!pasteContent.trim()) {
-      toast({ title: "No data", description: "Please paste your rows first.", variant: "destructive" })
-      return
-    }
-    if (!user || !db) {
-      toast({ title: "Auth Required", description: "Please sign in first.", variant: "destructive" })
-      return
-    }
-
+    if (!pasteContent.trim() || !user || !db) return;
     setIsUploading(true)
     const entries = parseData(pasteContent)
     if (entries.length === 0) {
-      toast({ title: "Parse Error", description: "Could not find valid rows. Make sure you include the header row.", variant: "destructive" })
+      toast({ title: "Parse Error", description: "No valid rows found.", variant: "destructive" })
       setIsUploading(false)
       return
     }
 
-    setImportStatus({ current: 0, total: entries.length, mode: "Analyzing..." })
-    
+    setImportStatus({ current: 0, total: entries.length, mode: "Syncing..." })
     try {
       const colRef = collection(db, "users", user.uid, "so_entries")
       let count = 0
-      
       for (const entry of entries) {
         count++
-        setImportStatus(prev => ({ ...prev, current: count, mode: "Processing..." }))
-        
-        // SMART UPSERT: Check if Week and Date already exist
+        setImportStatus(prev => ({ ...prev, current: count }))
         let existingDocId = null
         if (entry.week && entry.date) {
           const q = query(colRef, where("week", "==", entry.week), where("date", "==", entry.date), limit(1))
           const querySnapshot = await getDocs(q)
-          if (!querySnapshot.empty) {
-            existingDocId = querySnapshot.docs[0].id
-          }
+          if (!querySnapshot.empty) existingDocId = querySnapshot.docs[0].id
         }
-
         if (existingDocId) {
-          // Update existing
-          const { createdAt, ...updateData } = entry // Don't overwrite creation time
+          const { createdAt, ...updateData } = entry
           await updateDoc(doc(db, "users", user.uid, "so_entries", existingDocId), updateData)
         } else {
-          // Add new
           await addDoc(colRef, entry)
         }
       }
-
-      toast({ title: "Success", description: `Updated/Added ${entries.length} entries.` })
+      toast({ title: "Success", description: `Processed ${entries.length} entries.` })
       setPasteContent("")
       router.push("/sessions?tab=history")
     } catch (error: any) {
       toast({ title: "Import Failed", description: error.message, variant: "destructive" })
     } finally {
       setIsUploading(false)
-      setImportStatus({ current: 0, total: 0, mode: "" })
     }
   }
 
@@ -191,25 +180,39 @@ export default function ImportPage() {
         </header>
         <main className="p-6 max-w-4xl mx-auto w-full">
           <div className="space-y-8">
-            <div className="space-y-2">
-              <h1 className="text-3xl font-bold tracking-tight">Financial & Date Sync</h1>
-              <p className="text-muted-foreground">Import your Excel ledger and ensure your balance tracking is accurate.</p>
+            <div className="flex justify-between items-start">
+              <div className="space-y-2">
+                <h1 className="text-3xl font-bold tracking-tight">Financial & Date Sync</h1>
+                <p className="text-muted-foreground">Manage your ledger, fix dates, or erase everything to start over.</p>
+              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" className="rounded-xl h-10 px-4 font-bold">
+                    <Trash2 className="h-4 w-4 mr-2" /> Erase All Data
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="rounded-[2rem]">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete ALL entries in your SO Program ledger. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive hover:bg-destructive/90 rounded-xl">
+                      Yes, Erase Everything
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
-
-            <Alert className="bg-blue-50 border-blue-100 rounded-2xl">
-              <Info className="h-4 w-4 text-blue-600" />
-              <AlertTitle className="text-blue-800 font-bold">Smart Sync Enabled</AlertTitle>
-              <AlertDescription className="text-blue-700 text-xs">
-                You can paste your whole spreadsheet again to fix missing values (like the Paid column). 
-                The app will update existing rows based on the <strong>Week</strong> and <strong>Date</strong> instead of creating duplicates.
-              </AlertDescription>
-            </Alert>
 
             <div className="grid gap-6 md:grid-cols-2">
               <Card className="border-none shadow-sm bg-white">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2"><RefreshCw className="h-5 w-5 text-primary" />Format Fixer</CardTitle>
-                  <CardDescription>Standardize dates for perfect chronological sorting.</CardDescription>
+                  <CardDescription>Standardize dates for perfect sorting.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Button variant="outline" className="w-full h-12 rounded-xl font-bold" onClick={handleMigration} disabled={isMigrating}>
@@ -219,8 +222,8 @@ export default function ImportPage() {
               </Card>
               <Card className="border-none shadow-sm bg-emerald-50/30">
                 <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-500" />Financial Ready</CardTitle>
-                  <CardDescription>Pasting the "Paid" column will now correctly update your balance.</CardDescription>
+                  <CardTitle className="text-lg flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-500" />Ready to Paste</CardTitle>
+                  <CardDescription>The system will now update existing rows instead of duplicating them.</CardDescription>
                 </CardHeader>
               </Card>
             </div>
