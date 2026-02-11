@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { BrainCircuit, Sparkles, Loader2, ClipboardList, Table as TableIcon, PlusCircle, CheckCircle2, Wallet, Presentation, AlertCircle, DollarSign, History } from "lucide-react"
+import { BrainCircuit, Sparkles, Loader2, ClipboardList, Table as TableIcon, PlusCircle, CheckCircle2, Wallet, Presentation, AlertCircle, DollarSign, History, MessageSquare, CheckCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { summarizeSession } from "@/ai/flows/summarize-session"
 import { useToast } from "@/hooks/use-toast"
@@ -134,14 +134,14 @@ export default function SOProgramLogPage() {
         </header>
 
         <main className="p-4 sm:p-8">
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="max-w-6xl mx-auto">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="max-w-[1200px] mx-auto">
             <div className="mb-6 flex justify-center sm:justify-start">
               <TabsList className="bg-slate-100 rounded-full h-12 p-1 w-full sm:w-auto">
                 <TabsTrigger value="new-entry" className="rounded-full text-xs font-bold px-8 flex-1 sm:flex-none">
                   <PlusCircle className="h-4 w-4 mr-2" /> New Entry
                 </TabsTrigger>
                 <TabsTrigger value="history" className="rounded-full text-xs font-bold px-8 flex-1 sm:flex-none">
-                  <History className="h-4 w-4 mr-2" /> History
+                  <History className="h-4 w-4 mr-2" /> Program History
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -149,60 +149,63 @@ export default function SOProgramLogPage() {
             <TabsContent value="new-entry" className="mt-0 space-y-8">
               <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white">
                 <CardHeader className="bg-primary text-primary-foreground p-10">
-                  <CardTitle className="text-3xl font-black flex items-center gap-3"><ClipboardList className="h-8 w-8" /> Log Entry</CardTitle>
+                  <CardTitle className="text-3xl font-black flex items-center gap-3"><ClipboardList className="h-8 w-8" /> Session Log</CardTitle>
                 </CardHeader>
                 <CardContent className="p-10 space-y-10">
                   <div className="grid gap-6 md:grid-cols-3">
                     <div className="space-y-3">
-                      <Label className="text-[10px] font-black uppercase text-slate-400">WK</Label>
+                      <Label className="text-[10px] font-black uppercase text-slate-400">Week</Label>
                       <Input type="number" className="h-14 rounded-2xl bg-slate-50 font-bold" value={formData.week} onChange={(e) => setFormData({...formData, week: e.target.value})} />
                     </div>
                     <div className="space-y-3">
-                      <Label className="text-[10px] font-black uppercase text-slate-400">#</Label>
+                      <Label className="text-[10px] font-black uppercase text-slate-400">Session #</Label>
                       <Input className="h-14 rounded-2xl bg-slate-50 font-bold" value={formData.sessionNumber} onChange={(e) => setFormData({...formData, sessionNumber: e.target.value})} />
                     </div>
                     <div className="space-y-3">
-                      <Label className="text-[10px] font-black uppercase text-slate-400">DATE</Label>
+                      <Label className="text-[10px] font-black uppercase text-slate-400">Date</Label>
                       <Input type="date" className="h-14 rounded-2xl bg-slate-50 font-bold" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
                     </div>
                   </div>
                   <Separator />
                   <div className="bg-slate-50/50 p-8 rounded-3xl border border-slate-100 space-y-6">
-                    <div className="flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" /><h3 className="text-sm font-black uppercase text-slate-600">Financials</h3></div>
+                    <div className="flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" /><h3 className="text-sm font-black uppercase text-slate-600">Financial Tracking</h3></div>
                     <div className="grid gap-6 md:grid-cols-3">
                       <div className="space-y-3">
-                        <Label className="text-[10px] font-black uppercase text-slate-400">Cost</Label>
+                        <Label className="text-[10px] font-black uppercase text-slate-400">Session Cost</Label>
                         <Input className="h-14 rounded-2xl bg-white font-bold" value={formData.cost} onChange={(e) => setFormData({...formData, cost: e.target.value})} />
                       </div>
                       <div className="space-y-3">
-                        <Label className="text-[10px] font-black uppercase text-slate-400">Paid Amount</Label>
+                        <Label className="text-[10px] font-black uppercase text-slate-400">Amount Paid</Label>
                         <Input className="h-14 rounded-2xl bg-white font-bold text-emerald-600" value={formData.paidAmount} onChange={(e) => setFormData({...formData, paidAmount: e.target.value})} />
                       </div>
                       <div className="space-y-3">
-                        <Label className="text-[10px] font-black uppercase text-slate-400">Check #</Label>
+                        <Label className="text-[10px] font-black uppercase text-slate-400">Check / Ref #</Label>
                         <Input className="h-14 rounded-2xl bg-white font-bold" value={formData.checkNumber} onChange={(e) => setFormData({...formData, checkNumber: e.target.value})} />
                       </div>
                     </div>
                   </div>
                   <div className="space-y-6">
-                    <div className="flex items-center gap-2"><Presentation className="h-4 w-4 text-accent-foreground" /><h3 className="text-sm font-black uppercase text-slate-600">Presentation</h3></div>
+                    <div className="flex items-center gap-2"><Presentation className="h-4 w-4 text-accent-foreground" /><h3 className="text-sm font-black uppercase text-slate-600">Clinical Presentation</h3></div>
                     <div className="grid gap-6 md:grid-cols-4 items-center">
                       <div className="flex items-center justify-between h-14 bg-slate-50 rounded-2xl border px-6 md:col-span-1">
                         <Label className="text-xs font-bold">Presented?</Label>
                         <Switch checked={formData.ableToPresent} onCheckedChange={(v) => setFormData({...formData, ableToPresent: v})} />
                       </div>
                       <div className="md:col-span-3">
-                        <Input placeholder="Presentation Topic" className="h-14 rounded-2xl bg-slate-50 font-bold" value={formData.presentationTopic} onChange={(e) => setFormData({...formData, presentationTopic: e.target.value})} />
+                        <Input placeholder="What was the topic?" className="h-14 rounded-2xl bg-slate-50 font-bold" value={formData.presentationTopic} onChange={(e) => setFormData({...formData, presentationTopic: e.target.value})} />
                       </div>
                     </div>
                   </div>
-                  <Textarea placeholder="Session notes..." className="min-h-[200px] rounded-3xl bg-slate-50 p-6 text-lg" value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})} />
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase text-slate-400">Clinical Notes</Label>
+                    <Textarea placeholder="Describe the session breakthrough or details..." className="min-h-[200px] rounded-3xl bg-slate-50 p-6 text-lg" value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})} />
+                  </div>
                   <div className="flex gap-4">
                     <Button variant="outline" className="flex-1 h-16 rounded-2xl text-lg font-black" onClick={handleGetInsight} disabled={isSummarizing}>
-                      {isSummarizing ? <Loader2 className="h-5 w-5 animate-spin mr-3" /> : <Sparkles className="h-5 w-5 mr-3 text-amber-500" />} AI Review
+                      {isSummarizing ? <Loader2 className="h-5 w-5 animate-spin mr-3" /> : <Sparkles className="h-5 w-5 mr-3 text-amber-500" />} Get AI Insight
                     </Button>
                     <Button className="flex-1 h-16 rounded-2xl text-lg font-black shadow-xl" onClick={handleSaveLog} disabled={isSaving}>
-                      {isSaving ? <Loader2 className="h-5 w-5 animate-spin mr-3" /> : <CheckCircle2 className="h-5 w-5 mr-3" />} Save Entry
+                      {isSaving ? <Loader2 className="h-5 w-5 animate-spin mr-3" /> : <CheckCircle2 className="h-5 w-5 mr-3" />} Save Log Entry
                     </Button>
                   </div>
                 </CardContent>
@@ -213,7 +216,7 @@ export default function SOProgramLogPage() {
               <div className="grid gap-4 md:grid-cols-3">
                 <Card className="border-none shadow-sm bg-blue-50/50">
                   <CardContent className="p-4">
-                    <p className="text-[10px] font-bold uppercase text-blue-600">Total Program Cost</p>
+                    <p className="text-[10px] font-bold uppercase text-blue-600">Lifetime Program Cost</p>
                     <p className="text-2xl font-black">${totals.cost.toFixed(2)}</p>
                   </CardContent>
                 </Card>
@@ -225,7 +228,7 @@ export default function SOProgramLogPage() {
                 </Card>
                 <Card className={`border-none shadow-sm ${balance < 0 ? 'bg-red-50' : 'bg-emerald-50'}`}>
                   <CardContent className="p-4">
-                    <p className={`text-[10px] font-bold uppercase ${balance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>Current Balance</p>
+                    <p className={`text-[10px] font-bold uppercase ${balance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>Current Ledger Balance</p>
                     <p className="text-2xl font-black">{balance < 0 ? `-$${Math.abs(balance).toFixed(2)}` : `+$${balance.toFixed(2)}`}</p>
                   </CardContent>
                 </Card>
@@ -235,29 +238,35 @@ export default function SOProgramLogPage() {
                 <Table>
                   <TableHeader className="bg-slate-50">
                     <TableRow>
-                      <TableHead className="font-bold text-[10px] uppercase">WK</TableHead>
-                      <TableHead className="font-bold text-[10px] uppercase">DATE</TableHead>
-                      <TableHead className="font-bold text-[10px] uppercase">Cost</TableHead>
-                      <TableHead className="font-bold text-[10px] uppercase">Paid</TableHead>
-                      <TableHead className="font-bold text-[10px] uppercase">Check</TableHead>
-                      <TableHead className="font-bold text-[10px] uppercase">Topic</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase w-16">WK</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase w-16">#</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase">Date</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase text-right">Cost</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase text-right">Paid</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase text-center">Pres.</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase">Topic / Details</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase">Notes</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {recentEntries?.map((entry: any) => (
-                      <TableRow key={entry.id}>
+                      <TableRow key={entry.id} className="group hover:bg-slate-50/50">
                         <TableCell className="font-black text-primary">WK {entry.week}</TableCell>
-                        <TableCell className="text-xs font-mono">{entry.date}</TableCell>
-                        <TableCell className="font-mono text-xs">${Number(entry.cost).toFixed(2)}</TableCell>
-                        <TableCell className="font-mono text-xs text-emerald-600 font-bold">${Number(entry.paidAmount || 0).toFixed(2)}</TableCell>
-                        <TableCell className="text-xs">{entry.checkNumber || '—'}</TableCell>
-                        <TableCell className="text-xs font-bold truncate max-w-[200px]">{entry.presentationTopic}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground font-bold">{entry.sessionNumber}</TableCell>
+                        <TableCell className="text-xs font-mono font-bold">{entry.date}</TableCell>
+                        <TableCell className="font-mono text-xs text-right">${Number(entry.cost).toFixed(2)}</TableCell>
+                        <TableCell className="font-mono text-xs text-emerald-600 font-black text-right">${Number(entry.paidAmount || 0).toFixed(2)}</TableCell>
+                        <TableCell className="text-center">
+                          {entry.ableToPresent ? <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" /> : <Separator className="w-4 h-[1px] mx-auto" />}
+                        </TableCell>
+                        <TableCell className="text-xs font-bold truncate max-w-[150px]">{entry.presentationTopic}</TableCell>
+                        <TableCell className="text-[10px] text-muted-foreground truncate max-w-[200px]">{entry.notes}</TableCell>
                       </TableRow>
                     ))}
                     {(!recentEntries || recentEntries.length === 0) && !loadingEntries && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-20 text-muted-foreground italic">
-                          No history entries found. Go to "New Entry" to start logging.
+                        <TableCell colSpan={8} className="text-center py-20 text-muted-foreground italic">
+                          No history found. Click "New Entry" or use the Import tool.
                         </TableCell>
                       </TableRow>
                     )}

@@ -8,7 +8,7 @@ import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { ClipboardPaste, Loader2, AlertCircle, RefreshCw, CheckCircle2, Info, Trash2 } from "lucide-react"
+import { ClipboardPaste, Loader2, AlertCircle, RefreshCw, CheckCircle2, Info, Trash2, FileSpreadsheet } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore } from "@/firebase/provider"
 import { useUser } from "@/firebase/auth/use-user"
@@ -33,7 +33,7 @@ export default function ImportPage() {
     // If already YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
     
-    // Try to handle M/D/YY or M/D/YYYY
+    // Attempt to parse M/D/Y or M-D-Y
     const parts = dateStr.split(/[-/]/);
     if (parts.length !== 3) return dateStr;
     
@@ -116,21 +116,45 @@ export default function ImportPage() {
 
       headers.forEach((h, index) => {
         const val = values[index] || ""
+        
+        // Week Detection
         if (h === "wk" || h === "week") entry.week = Number(val) || 0
-        else if (h === "#" || h === "session" || h === "no") entry.sessionNumber = val || "0"
+        
+        // Session Number Detection (handles 'x' for excused)
+        else if (h === "#" || h === "session" || h === "no" || h === "session #" || h === "session no") {
+          entry.sessionNumber = val || "0"
+        }
+        
+        // Date Detection
         else if (h === "date") entry.date = formatDateForStorage(val)
-        else if (h === "cost" || h === "price") entry.cost = Number(val.replace(/[^0-9.-]+/g, "")) || 0
-        else if (h === "paid" || h === "amount" || h === "paid amount" || h === "amt paid" || h === "$") {
+        
+        // Cost Detection
+        else if (h === "cost" || h === "price" || h === "session cost") {
+          entry.cost = Number(val.replace(/[^0-9.-]+/g, "")) || 0
+        }
+        
+        // Paid Amount Detection
+        else if (h === "paid" || h === "amount" || h === "paid amount" || h === "amt paid" || h === "$" || h === "payment") {
           entry.paidAmount = Number(val.replace(/[^0-9.-]+/g, "")) || 0
         }
-        else if (h === "check #" || h === "check") entry.checkNumber = val
-        else if (h === "presented" || h === "able to present") {
-          entry.ableToPresent = ["YES", "TRUE", "1", "Y"].includes(val.toUpperCase())
+        
+        // Check Number Detection
+        else if (h === "check #" || h === "check" || h === "check no") entry.checkNumber = val
+        
+        // Presentation Status Detection
+        else if (h === "presented" || h === "pres" || h === "able to present" || h === "did present" || h === "presentation") {
+          const upper = val.toUpperCase();
+          entry.ableToPresent = ["YES", "TRUE", "1", "Y", "PRESENT", "T"].includes(upper);
         }
-        else if (h === "topic" || h === "presentation topic") entry.presentationTopic = val
-        else if (h === "notes") entry.notes = val
+        
+        // Topic Detection
+        else if (h === "topic" || h === "presentation topic" || h === "subject") entry.presentationTopic = val
+        
+        // Notes Detection
+        else if (h === "notes" || h === "session notes" || h === "clinical notes" || h === "note") entry.notes = val
       })
-      
+
+      // Validation: Must have at least a week or a date to be a valid entry
       if (entry.week || entry.date) result.push(entry)
     }
     return result
@@ -140,6 +164,7 @@ export default function ImportPage() {
     if (!pasteContent.trim() || !user || !db) return;
     setIsUploading(true)
     const entries = parseData(pasteContent)
+    
     if (entries.length === 0) {
       toast({ title: "Parse Error", description: "No valid rows found. Check your headers.", variant: "destructive" })
       setIsUploading(false)
@@ -154,22 +179,20 @@ export default function ImportPage() {
         count++
         setImportStatus(prev => ({ ...prev, current: count }))
         
-        // Find existing record to update (Upsert)
+        // Upsert Logic: Check for existing Week + Date to prevent duplicates
         let existingDocId = null
         if (entry.week && entry.date) {
           const q = query(colRef, where("week", "==", entry.week), where("date", "==", entry.date), limit(1))
           const querySnapshot = await getDocs(q)
-          if (!querySnapshot.empty) {
-            existingDocId = querySnapshot.docs[0].id
-          }
+          if (!querySnapshot.empty) existingDocId = querySnapshot.docs[0].id
         }
-
+        
         if (existingDocId) {
-          // Update existing doc (don't overwrite createdAt)
+          // Update existing doc (don't overwrite aiInsight or createdAt)
           const { createdAt, ...updateData } = entry
           await updateDoc(doc(db, "users", user.uid, "so_entries", existingDocId), updateData)
         } else {
-          // Add new doc
+          // Create new doc
           await addDoc(colRef, entry)
         }
       }
@@ -187,38 +210,42 @@ export default function ImportPage() {
     <div className="flex min-h-screen bg-slate-50/50">
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-white px-6 sticky top-0 z-10 shadow-sm">
-          <SidebarTrigger />
-          <h2 className="text-xl font-bold">Data Management</h2>
+        <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b bg-white px-6 sticky top-0 z-10 shadow-sm">
+          <div className="flex items-center gap-2">
+            <SidebarTrigger />
+            <h2 className="text-xl font-bold">Data Management</h2>
+          </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" className="rounded-xl h-10 px-4 font-bold">
+                <Trash2 className="h-4 w-4 mr-2" /> Erase All Data
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="rounded-[2rem]">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Wipe everything?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete ALL entries in your ledger. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive hover:bg-destructive/90 rounded-xl">
+                  Yes, Erase Everything
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </header>
-        <main className="p-6 max-w-4xl mx-auto w-full">
+
+        <main className="p-6 max-w-5xl mx-auto w-full">
           <div className="space-y-8">
-            <div className="flex justify-between items-start">
-              <div className="space-y-2">
-                <h1 className="text-3xl font-bold tracking-tight">Financial & Data Sync</h1>
-                <p className="text-muted-foreground">Manage your ledger, fix dates, or erase everything to start over.</p>
-              </div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" className="rounded-xl h-10 px-4 font-bold">
-                    <Trash2 className="h-4 w-4 mr-2" /> Erase All Data
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent className="rounded-[2rem]">
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will permanently delete ALL entries in your SO Program ledger. This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive hover:bg-destructive/90 rounded-xl">
-                      Yes, Erase Everything
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+            <div className="space-y-2">
+              <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
+                <FileSpreadsheet className="h-8 w-8 text-primary" /> 
+                Sync Your Spreadsheet
+              </h1>
+              <p className="text-muted-foreground">Paste your Excel or Sheets data below. We'll handle the rest.</p>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
@@ -233,24 +260,27 @@ export default function ImportPage() {
                   </Button>
                 </CardContent>
               </Card>
-              <Card className="border-none shadow-sm bg-emerald-50/30">
+              <Card className="border-none shadow-sm bg-emerald-50/50">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-500" />Smart Sync</CardTitle>
-                  <CardDescription>Pasting data will update existing sessions based on Week/Date.</CardDescription>
+                  <CardDescription>Pasting data for existing weeks will update the rows instead of duplicating them.</CardDescription>
                 </CardHeader>
               </Card>
             </div>
 
-            <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white">
+            <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white border-t-8 border-primary">
               <CardContent className="p-8 space-y-6">
-                <Textarea 
-                  placeholder="Paste spreadsheet rows here... (Headers: WK, Date, Cost, Paid, Able to Present, Presentation Topic, Notes)" 
-                  className="min-h-[300px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs p-6 shadow-inner"
-                  value={pasteContent}
-                  onChange={(e) => setPasteContent(e.target.value)}
-                  disabled={isUploading}
-                />
-                <Button className="w-full h-16 rounded-2xl font-black text-xl" disabled={!pasteContent || isUploading} onClick={handleProcessImport}>
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase text-slate-400">Excel Data Paste Area</Label>
+                  <Textarea 
+                    placeholder="Paste rows here (Include headers: WK, DATE, Cost, Paid, Check #, Pres, Topic, Notes...)" 
+                    className="min-h-[400px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs p-6 shadow-inner focus-visible:ring-primary"
+                    value={pasteContent}
+                    onChange={(e) => setPasteContent(e.target.value)}
+                    disabled={isUploading}
+                  />
+                </div>
+                <Button className="w-full h-16 rounded-2xl font-black text-xl shadow-lg shadow-primary/20" disabled={!pasteContent || isUploading} onClick={handleProcessImport}>
                   {isUploading ? (
                     <><Loader2 className="mr-3 h-6 w-6 animate-spin" /> {importStatus.mode} {importStatus.current}/{importStatus.total}</>
                   ) : (
