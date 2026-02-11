@@ -7,12 +7,13 @@ import {
   TrendingUp, 
   Sparkles,
   LogOut,
+  LogIn,
   BrainCircuit,
   ClipboardList,
   Upload
 } from "lucide-react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   Sidebar,
   SidebarContent,
@@ -25,6 +26,9 @@ import {
   SidebarGroupLabel,
   SidebarSeparator,
 } from "@/components/ui/sidebar"
+import { useUser } from "@/firebase/auth/use-user"
+import { useAuth } from "@/firebase/provider"
+import { signOut } from "firebase/auth"
 
 const mainNav = [
   { name: "My Dashboard", href: "/", icon: LayoutDashboard },
@@ -40,6 +44,14 @@ const toolsNav = [
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { user } = useUser()
+  const auth = useAuth()
+
+  const handleSignOut = async () => {
+    await signOut(auth)
+    router.push("/login")
+  }
 
   return (
     <Sidebar className="border-r border-border/50">
@@ -93,12 +105,26 @@ export function AppSidebar() {
 
       <SidebarFooter className="p-4">
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton className="text-muted-foreground hover:text-destructive">
-              <LogOut className="h-5 w-5" />
-              <span className="font-medium">Sign Out</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {user ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton 
+                onClick={handleSignOut}
+                className="text-muted-foreground hover:text-destructive w-full"
+              >
+                <LogOut className="h-5 w-5" />
+                <span className="font-medium">Sign Out</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild className="text-primary font-bold">
+                <Link href="/login">
+                  <LogIn className="h-5 w-5" />
+                  <span>Sign In</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
