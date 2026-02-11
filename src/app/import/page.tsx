@@ -25,7 +25,7 @@ export default function ImportPage() {
   const [importCount, setImportCount] = useState(0)
 
   const parseData = (text: string) => {
-    // Split by line and filter out purely empty lines
+    // Split by line and filter out purely empty lines or lines with just whitespace/tabs
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '')
     if (lines.length < 2) return []
 
@@ -99,7 +99,7 @@ export default function ImportPage() {
   }
 
   const handleProcessImport = async (textSource: string) => {
-    if (!textSource) {
+    if (!textSource || textSource.trim() === "") {
       toast({ title: "No data", description: "Please paste some data first.", variant: "destructive" })
       return
     }
@@ -112,6 +112,11 @@ export default function ImportPage() {
     setIsUploading(true)
     setImportCount(0)
     
+    toast({
+      title: "Analyzing Data...",
+      description: "Parsing your spreadsheet rows.",
+    })
+    
     try {
       const entries = parseData(textSource)
       
@@ -120,16 +125,15 @@ export default function ImportPage() {
       }
 
       toast({
-        title: "Importing...",
-        description: `Preparing to add ${entries.length} entries to your ledger.`,
+        title: "Starting Import",
+        description: `Adding ${entries.length} entries to your ledger.`,
       })
 
       const colRef = collection(db, "profiles", user.uid, "so_entries")
       
       let count = 0
       for (const entry of entries) {
-        // We trigger the writes. Per guidelines, we don't block on every single addDoc 
-        // to maintain responsiveness, but we'll use a small timeout to let the UI update the count.
+        // Initiate the write
         addDoc(colRef, {
           ...entry,
           createdAt: new Date().toISOString(),
@@ -139,9 +143,9 @@ export default function ImportPage() {
         count++
         setImportCount(count)
         
-        // Brief pause to allow React to render the counter update
-        if (count % 10 === 0) {
-          await new Promise(resolve => setTimeout(resolve, 50))
+        // Use a small delay every 5 records to allow React state updates to render the counter
+        if (count % 5 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 10))
         }
       }
 
@@ -152,11 +156,12 @@ export default function ImportPage() {
       
       setFile(null)
       setPasteContent("")
-      // Give it a moment before closing the loading state so user sees 100% completion
+      
+      // Keep loading state briefly so user sees the 100% completion
       setTimeout(() => {
         setIsUploading(false)
         setImportCount(0)
-      }, 1000)
+      }, 1500)
       
     } catch (error: any) {
       toast({
@@ -210,7 +215,7 @@ export default function ImportPage() {
                       onClick={() => handleProcessImport(pasteContent)}
                     >
                       {isUploading ? (
-                        <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processing {importCount}...</>
+                        <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processing Record {importCount}...</>
                       ) : (
                         "Import Pasted Data"
                       )}
@@ -290,7 +295,7 @@ export default function ImportPage() {
                     Tip
                   </h3>
                   <p className="text-[10px] text-muted-foreground">
-                    Pasting works best if you select all rows in Excel, copy, and paste here.
+                    Pasting works best if you select all rows in Excel, copy, and paste here. The parser handles tabs and commas automatically.
                   </p>
                 </CardContent>
               </Card>
