@@ -15,21 +15,22 @@
     },
     "SessionLog": {
       "title": "Session Log",
-      "description": "Detailed log for therapy sessions (Group, Individual, etc.).",
+      "description": "Detailed log for therapy sessions (Group, Individual, etc.) based on program tracking requirements.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "date": { "type": "string", "format": "date" },
         "type": { "type": "string", "enum": ["Group", "Individual", "Psychoeducation", "Family", "Other"] },
-        "topic": { "type": "string" },
         "module": { "type": "string", "description": "Specific program module or stage" },
         "facilitator": { "type": "string", "description": "Name of the counselor or group leader" },
+        "topic": { "type": "string" },
+        "goal": { "type": "string", "description": "Specific behavioral or therapeutic goal for this session" },
         "participationScore": { "type": "number", "description": "1-10 scale" },
         "moodScore": { "type": "number", "description": "1-10 scale" },
         "notes": { "type": "string" },
         "homeworkAssigned": { "type": "string" },
-        "aiInsight": { "type": "string" },
-        "tags": { "type": "array", "items": { "type": "string" } }
+        "homeworkStatus": { "type": "string", "enum": ["N/A", "Completed", "Partial", "Not Started"] },
+        "aiInsight": { "type": "string" }
       },
       "required": ["date", "type", "topic", "notes"]
     },
