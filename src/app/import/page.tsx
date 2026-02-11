@@ -1,19 +1,18 @@
 
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/layout/AppSidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { ClipboardPaste, Loader2, LogIn, AlertCircle } from "lucide-react"
+import { ClipboardPaste, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore } from "@/firebase/provider"
 import { useUser } from "@/firebase/auth/use-user"
 import { addDoc, collection } from "firebase/firestore"
-import Link from "next/link"
 
 export default function ImportPage() {
   const { user, loading: authLoading } = useUser()
@@ -38,6 +37,8 @@ export default function ImportPage() {
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(delimiter).map(v => v.trim().replace(/"/g, ''))
+      
+      // Map based on the headers provided by the user
       const entry: any = {
         week: 0,
         sessionNumber: "0",
@@ -54,28 +55,27 @@ export default function ImportPage() {
       
       headers.forEach((header, index) => {
         const val = values[index] || ""
-        const h = header.toUpperCase().trim()
+        const h = header.toLowerCase().trim()
         
-        if (h === "WK") {
+        if (h === "wk") {
           entry.week = Number(val) || 0
         } else if (h === "#") {
           entry.sessionNumber = val || "0"
-        } else if (h === "DATE") {
+        } else if (h === "date") {
           entry.date = val
-        } else if (h === "COST") {
+        } else if (h === "cost") {
           entry.cost = Number(val.replace(/[^0-9.-]+/g, "")) || 0
-        } else if (h === "PAID") {
-          // Check if paid value is a dollar amount > 0 or a string like "yes"
+        } else if (h === "paid") {
           const cleanVal = val.replace(/[^0-9.-]+/g, "")
           const paidAmount = Number(cleanVal) || 0
           entry.paid = paidAmount > 0 || ["YES", "TRUE", "1", "PAID"].includes(val.toUpperCase())
-        } else if (h === "CHECK #") {
+        } else if (h === "check #") {
           entry.checkNumber = val
-        } else if (h === "ABLE TO PRESENT") {
+        } else if (h === "able to present") {
           entry.ableToPresent = ["YES", "TRUE", "1"].includes(val.toUpperCase())
-        } else if (h === "PRESENTATION TOPIC") {
+        } else if (h === "presentation topic") {
           entry.presentationTopic = val
-        } else if (h === "NOTES") {
+        } else if (h === "notes") {
           entry.notes = val
         }
       })
@@ -94,7 +94,7 @@ export default function ImportPage() {
     }
     
     if (!user) {
-      toast({ title: "Authentication required", description: "Please sign in to save your program data.", variant: "destructive" })
+      toast({ title: "Wait a moment", description: "Finalizing your secure session...", variant: "destructive" })
       return
     }
     
@@ -108,11 +108,6 @@ export default function ImportPage() {
         throw new Error("No valid data found. Ensure headers match: WK, #, DATE, Cost, Paid, Notes.")
       }
 
-      toast({
-        title: "Starting Import",
-        description: `Importing ${entries.length} program entries to your ledger.`,
-      })
-
       const colRef = collection(db, "users", user.uid, "so_entries")
       
       let count = 0
@@ -120,16 +115,11 @@ export default function ImportPage() {
         await addDoc(colRef, entry)
         count++
         setImportCount(count)
-        
-        // Minor delay to keep UI responsive
-        if (count % 10 === 0) {
-          await new Promise(resolve => setTimeout(resolve, 50))
-        }
       }
 
       toast({
         title: "Import Successful",
-        description: `Processed ${count} session entries.`,
+        description: `Processed ${count} session entries. Redirecting...`,
       })
       
       setPasteContent("")
@@ -148,10 +138,6 @@ export default function ImportPage() {
     }
   }
 
-  if (authLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>
-  }
-
   return (
     <div className="flex min-h-screen bg-slate-50/50">
       <AppSidebar />
@@ -162,56 +148,53 @@ export default function ImportPage() {
         </header>
 
         <main className="p-6 max-w-4xl mx-auto w-full">
-          {!user ? (
-            <Card className="border-none shadow-xl rounded-3xl p-12 text-center space-y-6 bg-white">
-              <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto text-primary">
-                <AlertCircle className="h-10 w-10" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-2xl font-black">Authentication Required</h3>
-                <p className="text-muted-foreground">You must be signed in to import and save your program data securely.</p>
-              </div>
-              <Button asChild className="h-14 rounded-2xl px-8 font-black text-lg shadow-lg">
-                <Link href="/login">
-                  <LogIn className="h-5 w-5 mr-2" /> Go to Login
-                </Link>
-              </Button>
-            </Card>
-          ) : (
-            <div className="space-y-8">
-              <div className="space-y-2">
-                <h1 className="text-3xl font-bold tracking-tight">Sync Ledger</h1>
-                <p className="text-muted-foreground">Copy and paste your spreadsheet rows here. We'll automatically map the columns to your clinical history.</p>
-              </div>
+          <div className="space-y-8">
+            <div className="space-y-2">
+              <h1 className="text-3xl font-bold tracking-tight">Sync Ledger</h1>
+              <p className="text-muted-foreground">Paste your rows directly from Excel. We'll handle the formatting.</p>
+            </div>
 
-              <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white">
-                <CardContent className="p-8 space-y-6">
-                  <div className="flex items-center gap-2 text-primary font-bold mb-2">
-                    <ClipboardPaste className="h-5 w-5" />
-                    <h3>Paste from Excel / Spreadsheet</h3>
-                  </div>
-                  <Textarea 
-                    placeholder="WK	#	DATE	Cost	Paid... (paste rows including headers)" 
-                    className="min-h-[400px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs p-6 shadow-inner focus:bg-white transition-all"
-                    value={pasteContent}
-                    onChange={(e) => setPasteContent(e.target.value)}
-                    disabled={isUploading}
-                  />
+            <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white">
+              <CardContent className="p-8 space-y-6">
+                <div className="flex items-center gap-2 text-primary font-bold mb-2">
+                  <ClipboardPaste className="h-5 w-5" />
+                  <h3>Paste Rows (Including Headers)</h3>
+                </div>
+                <Textarea 
+                  placeholder="WK	#	DATE	Cost	Paid... (Copy from Excel and paste here)" 
+                  className="min-h-[400px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs p-6 shadow-inner focus:bg-white transition-all"
+                  value={pasteContent}
+                  onChange={(e) => setPasteContent(e.target.value)}
+                  disabled={isUploading}
+                />
+                
+                {authLoading ? (
+                  <Button disabled className="w-full h-16 rounded-2xl font-black text-xl bg-slate-200">
+                    <Loader2 className="mr-3 h-6 w-6 animate-spin" /> Preparing Secure Storage...
+                  </Button>
+                ) : (
                   <Button 
                     className="w-full h-16 rounded-2xl font-black text-xl shadow-xl transition-all active:scale-95"
                     disabled={!pasteContent || isUploading}
                     onClick={handleProcessImport}
                   >
                     {isUploading ? (
-                      <><Loader2 className="mr-3 h-6 w-6 animate-spin" /> Processing Record {importCount}...</>
+                      <><Loader2 className="mr-3 h-6 w-6 animate-spin" /> Saving Row {importCount}...</>
                     ) : (
                       "Import Ledger Data"
                     )}
                   </Button>
-                </CardContent>
-              </Card>
-            </div>
-          )}
+                )}
+
+                {!user && !authLoading && (
+                  <div className="flex items-center gap-2 p-4 bg-amber-50 rounded-xl text-amber-700 text-sm font-medium">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Signing you in anonymously to save your data...</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </main>
       </SidebarInset>
     </div>

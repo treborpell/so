@@ -2,21 +2,17 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper to check if user is signed in
+    // Helper to check if user is signed in (includes anonymous)
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Helper to check if user owns the document path
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
+    // Allow users to manage their own data
     match /users/{userId}/so_entries/{entryId} {
-      allow read, write: if isOwner(userId);
+      allow read, write: if request.auth.uid == userId;
     }
 
-    // Fallback for everything else
+    // Basic fallback
     match /{document=**} {
       allow read, write: if false;
     }

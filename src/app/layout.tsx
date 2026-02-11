@@ -4,10 +4,11 @@ import './globals.css';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
+import { AutoAuth } from '@/components/AutoAuth';
 
 export const metadata: Metadata = {
-  title: 'Mindful Meetings - Therapy Group Management',
-  description: 'Streamline group therapy sessions, track progress, and generate AI-powered insights.',
+  title: 'Mindful Tracker - SO Program Ledger',
+  description: 'Track your SO Program progress and financials with AI insights.',
 };
 
 export default function RootLayout({
@@ -24,6 +25,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased bg-background">
         <FirebaseClientProvider>
+          <AutoAuth />
           <SidebarProvider>
             {children}
             <Toaster />
