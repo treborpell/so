@@ -49,6 +49,7 @@ const toolsNav = [
   { name: "Import Data", href: "/import", icon: Upload },
   { name: "Wellness Trends", href: "/reports", icon: TrendingUp },
   { name: "Growth Insights", href: "/summaries", icon: Sparkles },
+  { name: "Syllabus", href: "/syllabus", icon: BookOpen },
   { name: "Preferences", href: "/settings", icon: Settings },
 ]
 

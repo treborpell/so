@@ -1,85 +1,181 @@
+'use client'
+import { useState, useEffect } from 'react'
+import { useAuth } from '@/firebase/provider'
+import { db } from '@/lib/firebase'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { SidebarTrigger } from '@/components/ui/sidebar'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 
-"use client"
-
-import { useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { CheckCircle2, Circle, Clock, Plus } from "lucide-react"
-import { useCollection, useMemoFirebase } from "@/firebase"
-import { collection, query, orderBy } from "firebase/firestore"
-import { useAuth } from "@/firebase/provider"
-import { SidebarTrigger } from "@/components/ui/sidebar"
+// --- Type Definitions ---
+interface Assignment { name: string; }
+interface Section { name: string; assignments: Assignment[]; }
+interface Phase { name: string; sections: Section[]; }
+interface AssignmentData {
+  datePresented?: string;
+  dateCompleted?: string;
+}
+interface AssignmentStatus { [key: string]: AssignmentData; }
+interface UiState { openPhases: string[]; openSections: Record<string, string[]>; }
 
 export default function AssignmentsPage() {
-  const { user, db, loading: authLoading } = useAuth()
-  const router = useRouter()
-  
+  const { user, loading: authLoading } = useAuth()
+  const [phases, setPhases] = useState<Phase[]>([])
+  const [assignmentStatus, setAssignmentStatus] = useState<AssignmentStatus>({})
+  const [uiState, setUiState] = useState<UiState>({ openPhases: [], openSections: {} })
+  const [isLoading, setIsLoading] = useState(true)
+
+  const createAssignmentId = (pIdx: number, sIdx: number, aIdx: number) => `p${pIdx}-s${sIdx}-a${aIdx}`
+
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login")
+    if (user) {
+      const fetchData = async () => {
+        setIsLoading(true)
+        try {
+          const syllabusDocRef = doc(db, 'users', user.uid, 'data', 'syllabus')
+          const statusDocRef = doc(db, 'users', user.uid, 'data', 'assignment_status')
+          const uiStateDocRef = doc(db, 'users', user.uid, 'data', 'assignment_ui_state')
+
+          const [syllabusSnap, statusSnap, uiStateSnap] = await Promise.all([
+            getDoc(syllabusDocRef),
+            getDoc(statusDocRef),
+            getDoc(uiStateDocRef)
+          ]);
+
+          if (syllabusSnap.exists()) setPhases(syllabusSnap.data().phases)
+          if (statusSnap.exists()) setAssignmentStatus(statusSnap.data() as AssignmentStatus)
+          if (uiStateSnap.exists()) setUiState(uiStateSnap.data() as UiState)
+
+        } catch (error) {
+          console.error("Error fetching data:", error)
+        } finally {
+          setIsLoading(false)
+        }
+      }
+      fetchData()
     }
-  }, [user, authLoading, router])
+  }, [user])
 
-  const assignmentsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return query(collection(db, "assignments"), orderBy("dueDate", "desc"));
-  }, [db, user]);
-  
-  const { data: assignments, isLoading } = useCollection(assignmentsQuery);
+  const updateAssignmentStatusInFirestore = async (assignmentId: string, newAssignmentData: AssignmentData) => {
+      if (!user) return;
+      try {
+          const statusDocRef = doc(db, 'users', user.uid, 'data', 'assignment_status');
+          await setDoc(statusDocRef, { [assignmentId]: newAssignmentData }, { merge: true });
+      } catch (error) {
+          console.error("Failed to save assignment status:", error);
+      }
+  }
 
-  if (authLoading || !user) {
-    return <div className="h-full flex items-center justify-center">Loading...</div>;
+  const handleAssignmentToggle = (assignmentId: string, isCompleted: boolean) => {
+    const currentData = assignmentStatus[assignmentId] || {};
+    const newDateCompleted = isCompleted ? (currentData.dateCompleted || new Date().toISOString().split('T')[0]) : undefined;
+    
+    const newData: AssignmentData = { ...currentData, dateCompleted: newDateCompleted };
+    if (newData.dateCompleted === undefined) { delete newData.dateCompleted; }
+
+    const newFullStatus = { ...assignmentStatus, [assignmentId]: newData };
+    setAssignmentStatus(newFullStatus);
+    updateAssignmentStatusInFirestore(assignmentId, newData);
+  }
+
+  const handleDateChange = (assignmentId: string, dateType: 'datePresented' | 'dateCompleted', newDate: string) => {
+    const currentData = assignmentStatus[assignmentId] || {};
+    const newData = { ...currentData, [dateType]: newDate };
+
+    if (!newDate) { delete newData[dateType]; }
+
+    const newFullStatus = { ...assignmentStatus, [assignmentId]: newData };
+    setAssignmentStatus(newFullStatus);
+    updateAssignmentStatusInFirestore(assignmentId, newData);
+  }
+
+  const updateUiStateInFirestore = async (newUiState: UiState) => {
+      if (!user) return;
+      try {
+          const uiStateDocRef = doc(db, 'users', user.uid, 'data', 'assignment_ui_state');
+          await setDoc(uiStateDocRef, newUiState, { merge: true });
+      } catch (error) {
+          console.error("Failed to save UI state:", error);
+      }
+  }
+
+  const handlePhaseToggle = (newOpenPhases: string[]) => {
+      const newUiState = { ...uiState, openPhases: newOpenPhases };
+      setUiState(newUiState);
+      updateUiStateInFirestore(newUiState);
+  }
+
+  const handleSectionToggle = (phaseId: string, newOpenSections: string[]) => {
+      const newUiState = { ...uiState, openSections: { ...uiState.openSections, [phaseId]: newOpenSections } };
+      setUiState(newUiState);
+      updateUiStateInFirestore(newUiState);
+  }
+
+  if (authLoading || isLoading) {
+    return <div className="h-full flex items-center justify-center">Loading Assignments...</div>;
   }
 
   return (
     <div className="flex flex-col min-h-full">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b bg-background/80 px-4 sticky top-0 z-10 backdrop-blur-md">
-        <div className="flex items-center gap-2">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white px-6 sticky top-0 z-20 shadow-sm">
+        <div className="flex items-center gap-4">
           <SidebarTrigger />
-          <h2 className="text-lg font-bold">Assignments</h2>
+          <h2 className="text-xl font-bold">Assignment Tracker</h2>
         </div>
-        <Button size="sm" className="rounded-full shadow-lg h-10">
-          <Plus className="h-4 w-4 mr-2" /> New Task
-        </Button>
       </header>
 
-      <main className="p-4">
-        <div className="max-w-4xl mx-auto space-y-4">
-          {isLoading ? (
-            <div className="text-center py-20 text-muted-foreground">Loading tasks...</div>
-          ) : (
-            <div className="grid gap-3">
-              {assignments?.map((assignment: any) => (
-                <Card key={assignment.id} className="border-none shadow-sm active:scale-[0.98] transition-all">
-                  <CardContent className="p-4 flex items-center gap-4">
-                    <div className={`p-2 rounded-full ${assignment.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
-                      {assignment.status === 'completed' ? <CheckCircle2 className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className={`font-bold text-sm ${assignment.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>
-                        {assignment.title}
-                      </h3>
-                      <p className="text-[10px] text-muted-foreground">{assignment.description}</p>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant="outline" className="rounded-full h-6 text-[10px] bg-slate-50">
-                        <Clock className="h-3 w-3 mr-1" /> {assignment.dueDate}
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-              {(!assignments || assignments.length === 0) && (
-                 <div className="text-center py-20 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
-                  <p className="text-sm font-bold text-slate-500">No assignments tracked yet.</p>
-                  <p className="text-xs text-muted-foreground mt-1">Add tasks from your therapy sessions here.</p>
-                  <Button variant="outline" size="sm" className="mt-4 rounded-full">Add First Assignment</Button>
-                </div>
-              )}
-            </div>
-          )}
+      <main className="p-4 sm:p-8">
+        <div className="max-w-[1200px] mx-auto">
+          {phases.length === 0 && (<Card><CardContent className="pt-6"><p className="text-center text-muted-foreground">Syllabus empty.</p></CardContent></Card>)}
+          <Accordion type="multiple" className="space-y-4" value={uiState.openPhases} onValueChange={handlePhaseToggle}>
+            {phases.map((phase, phaseIndex) => {
+              const phaseId = `phase-${phaseIndex}`;
+              return (
+                <AccordionItem key={phaseId} value={phaseId} className="bg-white border shadow-sm rounded-lg overflow-hidden">
+                  <AccordionTrigger className="p-6 text-xl font-bold w-full hover:no-underline">{phase.name}</AccordionTrigger>
+                  <AccordionContent className="px-6 pb-6 pt-0">
+                    {phase.sections.length === 0 ? (<p className="text-sm text-muted-foreground italic pl-4">No sections.</p>) : (
+                      <Accordion type="multiple" className="space-y-2" value={uiState.openSections[phaseId] || []} onValueChange={(value) => handleSectionToggle(phaseId, value)}>
+                        {phase.sections.map((section, sectionIndex) => {
+                          const sectionId = `section-${sectionIndex}`;
+                          return (
+                            <AccordionItem key={sectionId} value={sectionId} className="border-t">
+                              <AccordionTrigger className="font-semibold pt-4 mb-2 text-md text-slate-800 hover:no-underline">
+                                {section.name}
+                              </AccordionTrigger>
+                              <AccordionContent className="space-y-2 pl-8 pb-2 pt-2">
+                                {section.assignments.length === 0 ? (<p className="text-xs text-muted-foreground italic">No assignments.</p>) : (
+                                  section.assignments.map((assignment, assignmentIndex) => {
+                                    const assignmentId = createAssignmentId(phaseIndex, sectionIndex, assignmentIndex);
+                                    const data = assignmentStatus[assignmentId] || {};
+                                    const isCompleted = !!data.dateCompleted;
+                                    return (
+                                      <div key={assignmentId} className="flex flex-col md:flex-row md:items-center gap-3 py-3 border-b border-slate-100 last:border-b-0">
+                                        <div className="flex items-center gap-4 flex-grow">
+                                          <Checkbox id={assignmentId} checked={isCompleted} onCheckedChange={(checked) => handleAssignmentToggle(assignmentId, !!checked)} className="rounded-full h-5 w-5"/>
+                                          <label htmlFor={assignmentId} className={`text-sm font-medium leading-none cursor-pointer ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{assignment.name}</label>
+                                        </div>
+                                        <div className="flex flex-col sm:flex-row gap-4 pt-3 md:pt-0 pl-9 md:pl-0">
+                                            <div className="flex items-center justify-between"><label className="text-xs text-slate-500 shrink-0">Presented</label><Input type="date" value={data.datePresented || ''} onChange={(e) => handleDateChange(assignmentId, 'datePresented', e.target.value)} className="h-9 w-36 rounded-md bg-slate-50 border-slate-200 text-xs" /></div>
+                                            <div className="flex items-center justify-between"><label className="text-xs text-slate-500 shrink-0">Completed</label><Input type="date" value={data.dateCompleted || ''} onChange={(e) => handleDateChange(assignmentId, 'dateCompleted', e.target.value)} className="h-9 w-36 rounded-md bg-slate-50 border-slate-200 text-xs" /></div>
+                                        </div>
+                                      </div>
+                                    )
+                                  })
+                                )}
+                              </AccordionContent>
+                            </AccordionItem>
+                          )
+                        })}
+                      </Accordion>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              )
+            })}
+          </Accordion>
         </div>
       </main>
     </div>
