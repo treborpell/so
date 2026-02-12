@@ -20,7 +20,9 @@ import {
   ChevronDown,
   ChevronUp,
   X,
-  PlusCircle
+  PlusCircle,
+  BrainCircuit,
+  Heart
 } from "lucide-react"
 import { useAuth } from "@/firebase/provider"
 import { doc, getDoc, setDoc, onSnapshot, updateDoc, arrayUnion } from "firebase/firestore"
@@ -29,6 +31,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { callFlow } from "@/lib/genkit-client"
 
 // Helper to get local date string YYYY-MM-DD
 function getLocalDateString(date: Date) {
@@ -43,13 +46,17 @@ function QuickSelect({
   options, 
   selected = [], 
   onChange,
-  onNewItem
+  onNewItem,
+  onGenerate, // For AI generation
+  isGenerating, // Loading state for AI
 }: { 
   label: string, 
   options: string[], 
   selected: string[], 
   onChange: (items: string[]) => void,
-  onNewItem: (item: string) => void
+  onNewItem: (item: string) => void,
+  onGenerate?: () => void,
+  isGenerating?: boolean,
 }) {
   const [customValue, setCustomValue] = useState("");
 
@@ -104,6 +111,17 @@ function QuickSelect({
           <PlusCircle className="h-4 w-4" />
         </Button>
       </div>
+      {onGenerate && (
+        <Button 
+          variant="outline" 
+          onClick={onGenerate}
+          disabled={isGenerating}
+          className="w-full h-10 rounded-xl font-bold text-primary border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all gap-2"
+        >
+          {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
+          Auto-Suggest {label}
+        </Button>
+      )}
     </div>
   );
 }
@@ -129,6 +147,8 @@ export default function JournalPage() {
   const [weekData, setWeekData] = useState<any>({ weeklyFields: {}, days: {} })
   const [isSaving, setIsSaving] = useState(false)
   const [expandedDay, setExpandedDay] = useState<string | null>(null)
+  const [isGeneratingReflection, setIsGeneratingReflection] = useState(false);
+  const [isExtractingFeelings, setIsExtractingFeelings] = useState(false);
 
   const todayStr = useMemo(() => getLocalDateString(new Date()), []);
 
@@ -168,6 +188,72 @@ export default function JournalPage() {
     try { await updateDoc(prefRef, { [field]: arrayUnion(item) }); } catch (e) { console.error(e); }
   };
 
+  const handleGenerateReflection = async (dateKey: string, currentThoughts: string, previousReflections: string[]) => {
+    setIsGeneratingReflection(true);
+    try {
+      const dailyData = weekData.days?.[dateKey] || {};
+      const response = await callFlow('generateReflection', {
+        previousReflections: previousReflections.slice(-3), // Provide recent reflections as context
+        sThoughts: dailyData.sThoughts,
+        sFantasies: dailyData.sFantasies,
+        sBehaviors: dailyData.sBehaviors,
+        dailyEvents: dailyData.selectedEvents,
+        feelings: dailyData.selectedFeelings
+      });
+      
+      if (response.result?.reflection) {
+        handleDayFieldChange(dateKey, 'thoughts', response.result.reflection);
+        if (response.result.suggestedFeelings && response.result.suggestedFeelings.length > 0) {
+          const uniqueFeelings = Array.from(new Set([...(dailyData.selectedFeelings || []), ...response.result.suggestedFeelings]));
+          handleDayFieldChange(dateKey, 'selectedFeelings', uniqueFeelings);
+        }
+        toast({ title: "Reflection Generated", description: "AI insights applied." });
+      } else {
+        toast({ title: "AI Failed", description: "Could not generate reflection.", variant: "destructive" });
+      }
+    } catch (error: any) {
+      console.error("Error generating reflection:", error);
+      toast({ title: "AI Error", description: error.message, variant: "destructive" });
+    } finally {
+      setIsGeneratingReflection(false);
+    }
+  };
+
+  const handleExtractFeelings = async (dateKey: string) => {
+    setIsExtractingFeelings(true);
+    try {
+      const dailyData = weekData.days?.[dateKey] || {};
+      const textToAnalyze = [
+        dailyData.sThoughts, 
+        dailyData.sFantasies, 
+        dailyData.sBehaviors, 
+        (dailyData.selectedEvents || []).join(', '),
+        dailyData.thoughts // Also consider any existing reflection
+      ].filter(Boolean).join(' ');
+
+      if (!textToAnalyze.trim()) {
+        toast({ title: "No Text", description: "Please enter some thoughts or events first.", variant: "destructive" });
+        return;
+      }
+
+      const response = await callFlow('extractFeelings', { text: textToAnalyze });
+      if (response.result?.feelings && response.result.feelings.length > 0) {
+        const uniqueFeelings = Array.from(new Set([...(dailyData.selectedFeelings || []), ...response.result.feelings]));
+        handleDayFieldChange(dateKey, 'selectedFeelings', uniqueFeelings);
+        // Learn new feelings as well
+        response.result.feelings.forEach((f: string) => handleLearnNewItem('feelings', f));
+        toast({ title: "Feelings Suggested", description: "AI-powered emotional analysis." });
+      } else {
+        toast({ title: "No Feelings", description: "AI could not extract feelings.", variant: "default" });
+      }
+    } catch (error: any) {
+      console.error("Error extracting feelings:", error);
+      toast({ title: "AI Error", description: error.message, variant: "destructive" });
+    } finally {
+      setIsExtractingFeelings(false);
+    }
+  };
+
   const handleDayFieldChange = (dateKey: string, field: string, value: any) => {
     setWeekData((prev: any) => ({ ...prev, days: { ...prev.days, [dateKey]: { ...(prev.days[dateKey] || {}), [field]: value } } }));
   };
@@ -198,6 +284,22 @@ export default function JournalPage() {
       return d;
     });
   }, [currentWeekStart]);
+
+  // Collect previous reflections for AI context
+  const allPreviousReflections = useMemo(() => {
+    if (!weekData || !weekData.days) return [];
+    const reflections: string[] = [];
+    // Iterate through all days in weekData.days
+    for (const dateKey in weekData.days) {
+      if (weekData.days.hasOwnProperty(dateKey)) {
+        const dayData = weekData.days[dateKey];
+        if (dayData.thoughts && typeof dayData.thoughts === 'string' && dayData.thoughts.trim() !== '') {
+          reflections.push(dayData.thoughts);
+        }
+      }
+    }
+    return reflections;
+  }, [weekData]);
 
   if (authLoading || !user || !currentWeekStart) {
     return <div className="h-full flex items-center justify-center font-black">Syncing...</div>;
@@ -237,7 +339,6 @@ export default function JournalPage() {
             const isOpen = expandedDay === dateKey;
             const data = weekData.days?.[dateKey] || {};
             
-            // Calculate hasData outside of useMemo in the loop
             const hasData = 
               data.sThoughts || data.sFantasies || data.sBehaviors || data.thoughts ||
               (data.selectedEvents && data.selectedEvents.length > 0) ||
@@ -309,12 +410,25 @@ export default function JournalPage() {
                               selected={data.selectedFeelings || []} 
                               onChange={(items) => handleDayFieldChange(dateKey, 'selectedFeelings', items)}
                               onNewItem={(item) => handleLearnNewItem('feelings', item)}
+                              onGenerate={() => handleExtractFeelings(dateKey)}
+                              isGenerating={isExtractingFeelings}
                            />
                         </div>
                       </div>
                       <div className="space-y-3">
                         <Label className="text-[10px] font-black uppercase text-slate-400 ml-1 tracking-[0.2em]">Detailed Reflection</Label>
-                        <Textarea placeholder="..." value={data.thoughts || ""} onChange={(e) => handleDayFieldChange(dateKey, 'thoughts', e.target.value)} className="min-h-[160px] rounded-3xl bg-slate-50 border-none font-medium p-8 shadow-inner" />
+                        <div className="flex gap-3">
+                          <Textarea placeholder="..." value={data.thoughts || ""} onChange={(e) => handleDayFieldChange(dateKey, 'thoughts', e.target.value)} className="flex-1 min-h-[160px] rounded-3xl bg-slate-50 border-none font-medium p-8 shadow-inner" />
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            className="h-12 w-12 rounded-xl text-primary border-primary/20 bg-primary/5 hover:bg-primary/10 shrink-0"
+                            onClick={() => handleGenerateReflection(dateKey, data.thoughts || "", allPreviousReflections)}
+                            disabled={isGeneratingReflection}
+                          >
+                            {isGeneratingReflection ? <Loader2 className="h-5 w-5 animate-spin" /> : <BrainCircuit className="h-5 w-5" />}
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </CollapsibleContent>
