@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/layout/AppSidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
@@ -11,17 +11,22 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Loader2, RefreshCw, CheckCircle2, Trash2, FileSpreadsheet } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useFirestore } from "@/firebase/provider"
-import { useUser } from "@/firebase/auth/use-user"
+import { useFirestore, useUser } from "@/firebase/provider"
 import { addDoc, collection, getDocs, updateDoc, doc, query, where, limit, writeBatch } from "firebase/firestore"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 export default function ImportPage() {
-  const { user } = useUser()
+  const { user, isUserLoading: authLoading } = useUser()
   const db = useFirestore()
   const { toast } = useToast()
   const router = useRouter()
   
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login")
+    }
+  }, [user, authLoading, router])
+
   const [pasteContent, setPasteContent] = useState("")
   const [isUploading, setIsUploading] = useState(false)
   const [isMigrating, setIsMigrating] = useState(false)
@@ -177,6 +182,10 @@ export default function ImportPage() {
     } finally {
       setIsUploading(false)
     }
+  }
+
+  if (authLoading || !user) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
 
   return (

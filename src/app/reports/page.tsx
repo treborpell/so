@@ -1,12 +1,28 @@
 "use client"
 
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/layout/AppSidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { FileBarChart, Download, FileText, Share2, Filter } from "lucide-react"
+import { useUser } from "@/firebase/provider"
 
 export default function ReportsPage() {
+  const { user, isUserLoading: authLoading } = useUser()
+  const router = useRouter()
+  
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login")
+    }
+  }, [user, authLoading, router])
+
+  if (authLoading || !user) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
   return (
     <div className="flex min-h-screen">
       <AppSidebar />

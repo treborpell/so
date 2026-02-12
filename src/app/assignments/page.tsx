@@ -1,6 +1,8 @@
 
 "use client"
 
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/layout/AppSidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent } from "@/components/ui/card"
@@ -9,17 +11,29 @@ import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, Circle, Clock, Plus } from "lucide-react"
 import { useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { useFirestore } from "@/firebase/provider"
+import { useFirestore, useUser } from "@/firebase/provider"
 
 export default function AssignmentsPage() {
+  const { user, isUserLoading: authLoading } = useUser()
+  const router = useRouter()
   const db = useFirestore();
   
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login")
+    }
+  }, [user, authLoading, router])
+
   const assignmentsQuery = useMemoFirebase(() => {
-    if (!db) return null;
+    if (!db || !user) return null;
     return query(collection(db, "assignments"), orderBy("dueDate", "desc"));
-  }, [db]);
+  }, [db, user]);
   
-  const { data: assignments, loading } = useCollection(assignmentsQuery);
+  const { data: assignments, isLoading } = useCollection(assignmentsQuery);
+
+  if (authLoading || !user) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -37,7 +51,7 @@ export default function AssignmentsPage() {
 
         <main className="p-4">
           <div className="max-w-4xl mx-auto space-y-4">
-            {loading ? (
+            {isLoading ? (
               <div className="text-center py-20 text-muted-foreground">Loading tasks...</div>
             ) : (
               <div className="grid gap-3">

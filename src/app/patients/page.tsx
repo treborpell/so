@@ -1,6 +1,8 @@
 
 "use client"
 
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/layout/AppSidebar"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent } from "@/components/ui/card"
@@ -12,17 +14,29 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { useCollection, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import { useFirestore } from "@/firebase/provider"
+import { useFirestore, useUser } from "@/firebase/provider"
 
 export default function PatientsPage() {
+  const { user, isUserLoading: authLoading } = useUser()
+  const router = useRouter()
   const db = useFirestore();
   
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login")
+    }
+  }, [user, authLoading, router])
+
   const patientsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return query(collection(db, "patients"), orderBy("name"));
   }, [db]);
   
-  const { data: patients, loading } = useCollection(patientsQuery);
+  const { data: patients, isLoading } = useCollection(patientsQuery);
+
+  if (authLoading || !user) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -45,7 +59,7 @@ export default function PatientsPage() {
               <Input placeholder="Search roster..." className="border-none shadow-none focus-visible:ring-0 bg-transparent h-10" />
             </div>
 
-            {loading ? (
+            {isLoading ? (
               <div className="text-center py-20 text-muted-foreground">Loading roster...</div>
             ) : (
               <div className="grid gap-3">

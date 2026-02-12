@@ -176,6 +176,11 @@ const Sidebar = React.forwardRef<
     ref
   ) => {
     const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+    const [hasMounted, setHasMounted] = React.useState(false);
+
+    React.useEffect(() => {
+      setHasMounted(true);
+    }, []);
 
     if (collapsible === "none") {
       return (
@@ -192,7 +197,7 @@ const Sidebar = React.forwardRef<
       )
     }
 
-    if (isMobile) {
+    if (isMobile && hasMounted) {
       return (
         <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
           <SheetContent
@@ -216,6 +221,7 @@ const Sidebar = React.forwardRef<
       )
     }
 
+    // Fallback for SSR or if not mobile
     return (
       <div
         ref={ref}

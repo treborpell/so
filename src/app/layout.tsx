@@ -1,14 +1,13 @@
 
 import type {Metadata} from 'next';
 import './globals.css';
-import { SidebarProvider } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/toaster';
-import { FirebaseClientProvider } from '@/firebase/client-provider';
-import { AutoAuth } from '@/components/AutoAuth';
+import { AuthProvider } from '@/firebase/provider';
+import { Suspense } from 'react';
 
 export const metadata: Metadata = {
-  title: 'Mindful Tracker - SO Program Ledger',
-  description: 'Track your SO Program progress and financials with AI insights.',
+  title: 'Mindful Tracker',
+  description: 'Manage your SO Program journey with clarity.',
 };
 
 export default function RootLayout({
@@ -21,16 +20,15 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
       </head>
-      <body className="font-body antialiased bg-background">
-        <FirebaseClientProvider>
-          <AutoAuth />
-          <SidebarProvider>
+      <body className="font-body antialiased bg-background text-foreground">
+        <AuthProvider>
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-black">Mindful...</div>}>
             {children}
-            <Toaster />
-          </SidebarProvider>
-        </FirebaseClientProvider>
+          </Suspense>
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );

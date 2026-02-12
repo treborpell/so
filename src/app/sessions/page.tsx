@@ -15,8 +15,7 @@ import { BrainCircuit, Sparkles, Loader2, ClipboardList, Table as TableIcon, Plu
 import { Badge } from "@/components/ui/badge"
 import { summarizeSession } from "@/ai/flows/summarize-session"
 import { useToast } from "@/hooks/use-toast"
-import { useFirestore } from "@/firebase/provider"
-import { useUser } from "@/firebase/auth/use-user"
+import { useFirestore, useUser } from "@/firebase/provider"
 import { addDoc, collection, query, orderBy, limit } from "firebase/firestore"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -25,11 +24,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import Link from "next/link"
 
 export default function SOProgramLogPage() {
-  const { user } = useUser()
+  const { user, isUserLoading: authLoading } = useUser()
   const db = useFirestore()
   const { toast } = useToast()
   const searchParams = useSearchParams()
   const router = useRouter()
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login")
+    }
+  }, [user, authLoading, router])
 
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "new-entry")
   const [isSaving, setIsSaving] = useState(false)
@@ -53,7 +58,7 @@ export default function SOProgramLogPage() {
     return query(collection(db, "users", user.uid, "so_entries"), orderBy("date", "desc"));
   }, [db, user]);
   
-  const { data: recentEntries, loading: loadingEntries } = useCollection(entriesQuery);
+  const { data: recentEntries, isLoading: loadingEntries } = useCollection(entriesQuery);
 
   const [formData, setFormData] = useState({
     week: "",
@@ -66,6 +71,10 @@ export default function SOProgramLogPage() {
     presentationTopic: "",
     notes: ""
   })
+
+  if (authLoading || !user) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
 
   const totals = recentEntries?.reduce((acc, log) => ({
     cost: acc.cost + (Number(log.cost) || 0),
@@ -126,7 +135,7 @@ export default function SOProgramLogPage() {
     <div className="flex min-h-screen bg-slate-50/50">
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white px-6 sticky top-0 z-20 shadow-sm">
+        <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white px-6 sticky top-0 z-10 shadow-sm">
           <div className="flex items-center gap-4">
             <SidebarTrigger />
             <h2 className="text-xl font-bold">SO Program Ledger</h2>

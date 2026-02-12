@@ -27,8 +27,7 @@ import {
   SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { useUser } from "@/firebase/auth/use-user"
-import { useAuth } from "@/firebase/provider"
+import { useAuth, useUser } from "@/firebase/provider"
 import { signOut } from "firebase/auth"
 
 const mainNav = [
