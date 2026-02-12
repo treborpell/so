@@ -10,7 +10,10 @@ import {
   LogIn,
   BrainCircuit,
   ClipboardList,
-  Upload
+  Upload,
+  Settings,
+  BookOpen,
+  ShieldCheck
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -27,11 +30,13 @@ import {
   SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { useAuth, useUser } from "@/firebase/provider"
+import { useAuth } from "@/firebase/provider"
 import { signOut } from "firebase/auth"
 
 const mainNav = [
   { name: "My Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "Daily Journal", href: "/journal", icon: BookOpen },
+  { name: "Polygraphs", href: "/polygraphs", icon: ShieldCheck },
   { name: "SO Program Log", href: "/sessions", icon: ClipboardList },
   { name: "Assignments", href: "/assignments", icon: CheckSquare },
 ]
@@ -40,13 +45,13 @@ const toolsNav = [
   { name: "Import Data", href: "/import", icon: Upload },
   { name: "Wellness Trends", href: "/reports", icon: TrendingUp },
   { name: "Growth Insights", href: "/summaries", icon: Sparkles },
+  { name: "Preferences", href: "/settings", icon: Settings },
 ]
 
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user } = useUser()
-  const { auth } = useAuth()
+  const { user, auth } = useAuth()
   const { setOpenMobile, isMobile } = useSidebar()
 
   const handleSignOut = async () => {

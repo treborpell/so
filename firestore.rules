@@ -2,17 +2,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper to check if user is signed in (includes anonymous)
-    function isSignedIn() {
-      return request.auth != null;
+    
+    // Allow users to manage their own top-level user document and all subcollections
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Allow users to manage their own data
-    match /users/{userId}/so_entries/{entryId} {
-      allow read, write: if request.auth.uid == userId;
-    }
+    // Explicitly allow access to global collections if needed in the future
+    // For now, only user-specific data is permitted.
 
-    // Basic fallback
+    // Basic fallback: deny everything else
     match /{document=**} {
       allow read, write: if false;
     }

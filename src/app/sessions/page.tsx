@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,7 +13,7 @@ import { Sparkles, Loader2, ClipboardList, PlusCircle, CheckCircle2, Wallet, Pre
 import { Badge } from "@/components/ui/badge"
 import { summarizeSession } from "@/ai/flows/summarize-session"
 import { useToast } from "@/hooks/use-toast"
-import { addDoc, collection, query, orderBy } from "firebase/firestore"
+import { addDoc, collection, query, orderBy, limit, doc, getDoc } from "firebase/firestore"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCollection, useMemoFirebase } from "@/firebase"
@@ -27,21 +27,29 @@ export default function SOProgramLogPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login")
-    }
-  }, [user, authLoading, router])
-
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "new-entry")
   const [isSaving, setIsSaving] = useState(false)
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [aiInsight, setAiInsight] = useState<any>(null)
 
+  // Automation State
+  const [formData, setFormData] = useState({
+    week: "",
+    sessionNumber: "",
+    date: new Date().toISOString().split('T')[0],
+    cost: "68.25",
+    paidAmount: "0",
+    checkNumber: "",
+    ableToPresent: false,
+    presentationTopic: "",
+    notes: ""
+  })
+
   useEffect(() => {
-    const tab = searchParams.get("tab")
-    if (tab) setActiveTab(tab)
-  }, [searchParams])
+    if (!authLoading && !user) {
+      router.push("/login")
+    }
+  }, [user, authLoading, router])
 
   const handleTabChange = (value: string) => {
     setActiveTab(value)
@@ -57,17 +65,50 @@ export default function SOProgramLogPage() {
   
   const { data: recentEntries, isLoading: loadingEntries } = useCollection(entriesQuery);
 
-  const [formData, setFormData] = useState({
-    week: "",
-    sessionNumber: "",
-    date: new Date().toISOString().split('T')[0],
-    cost: "68.25",
-    paidAmount: "0",
-    checkNumber: "",
-    ableToPresent: false,
-    presentationTopic: "",
-    notes: ""
-  })
+  // AUTOMATION LOGIC: Pre-fill form based on history and settings
+  useEffect(() => {
+    async function automateForm() {
+      if (!user || !db || !recentEntries) return;
+
+      // 1. Fetch user preferences
+      const prefRef = doc(db, "users", user.uid, "config", "preferences");
+      const prefSnap = await getDoc(prefRef);
+      const prefs = prefSnap.exists() ? prefSnap.data() : { defaultCost: "68.25", preferredDay: "2" };
+
+      // 2. Get latest entry info
+      const latest = recentEntries[0];
+      
+      if (latest) {
+        const nextWeek = (Number(latest.week) + 1).toString();
+        const nextSession = (Number(latest.sessionNumber) + 1).toString();
+        
+        // Calculate next date (target day of the week)
+        const lastDate = new Date(latest.date);
+        const targetDay = Number(prefs.preferredDay); // 0-6
+        const nextDate = new Date(lastDate);
+        nextDate.setDate(lastDate.getDate() + 7); // Increment by exactly one week
+        
+        // Ensure it aligns with the target day if somehow drifted
+        const dayDiff = targetDay - nextDate.getDay();
+        nextDate.setDate(nextDate.getDate() + dayDiff);
+
+        setFormData(prev => ({
+          ...prev,
+          week: nextWeek,
+          sessionNumber: nextSession,
+          cost: prefs.defaultCost,
+          date: nextDate.toISOString().split('T')[0]
+        }));
+      } else {
+        // Fallback for first entry
+        setFormData(prev => ({ ...prev, cost: prefs.defaultCost }));
+      }
+    }
+
+    if (activeTab === "new-entry" && !loadingEntries) {
+      automateForm();
+    }
+  }, [user, db, recentEntries, activeTab, loadingEntries]);
 
   if (authLoading || !user) {
     return <div className="h-full flex items-center justify-center">Loading...</div>;
@@ -110,15 +151,6 @@ export default function SOProgramLogPage() {
         aiInsight: aiInsight?.summary || ""
       })
       toast({ title: "Entry Saved" })
-      setFormData({
-        ...formData,
-        week: (Number(formData.week) + 1).toString(),
-        sessionNumber: "",
-        paidAmount: "0",
-        presentationTopic: "",
-        notes: "",
-        checkNumber: ""
-      })
       setAiInsight(null)
       handleTabChange("history")
     } catch (error) {
