@@ -192,7 +192,7 @@ export default function JournalPage() {
     setIsGeneratingReflection(true);
     try {
       const dailyData = weekData.days?.[dateKey] || {};
-      const response = await callFlow('generateReflection', {
+      const response = await callFlow<any, { reflection: string; suggestedFeelings?: string[] }>('generateReflection', {
         previousReflections: previousReflections.slice(-3), // Provide recent reflections as context
         sThoughts: dailyData.sThoughts,
         sFantasies: dailyData.sFantasies,
@@ -236,7 +236,7 @@ export default function JournalPage() {
         return;
       }
 
-      const response = await callFlow('extractFeelings', { text: textToAnalyze });
+      const response = await callFlow<any, { feelings?: string[] }>('extractFeelings', { text: textToAnalyze });
       if (response.result?.feelings && response.result.feelings.length > 0) {
         const uniqueFeelings = Array.from(new Set([...(dailyData.selectedFeelings || []), ...response.result.feelings]));
         handleDayFieldChange(dateKey, 'selectedFeelings', uniqueFeelings);

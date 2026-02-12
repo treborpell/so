@@ -13,13 +13,6 @@ function NotificationScheduler() {
   useEffect(() => {
     if (!user || !db || typeof window === "undefined") return;
 
-    // Register Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then(reg => {
-        console.log('SW Registered', reg);
-      });
-    }
-
     const checkAndNotify = async () => {
       if (Notification.permission !== "granted") return;
 
