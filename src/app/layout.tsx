@@ -19,6 +19,10 @@ export const metadata: Metadata = {
   formatDetection: {
     telephone: false,
   },
+  icons: {
+    icon: "/brain-circuit.png",
+    apple: "/brain-circuit.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -36,10 +40,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="apple-touch-icon" href="/icon-192x192.png" />
-      </head>
       <body className={inter.className}>
         <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-black">Mindful...</div>}>
           <ClientWrapper>
