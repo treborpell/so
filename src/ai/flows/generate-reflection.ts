@@ -31,28 +31,28 @@ export const generateReflection = ai.defineFlow(
     ].filter(Boolean).join('\n');
 
     const prompt = `
-      Based on the following context from a daily journal entry, generate a concise yet insightful and supportive reflection. 
-      Focus on growth, self-awareness, and constructive processing. Do not be overly clinical or preachy. Keep it to 2-3 sentences.
+      Based on the following context from a daily journal entry, generate an EXTREMELY concise, punchy, one-sentence reflection (max 15 words).
+      Focus on growth and self-awareness. Do not be preachy. Direct and impactful.
       
       Context:
       ${context}
 
-      Also, from the generated reflection, extract a list of up to 5 key feelings that are present or implied.
+      Also, extract only 1 or 2 most critical feelings.
 
       Reflection: 
-      Suggested Feelings: [comma-separated list]
+      Suggested Feelings: [comma-separated list, max 2 items]
     `;
 
     const { text } = await ai.generate({ 
       prompt,
-      config: { temperature: 0.7 }
+      config: { temperature: 0.5 } // Lower temperature for more focused output
     });
 
     const [reflectionPart, feelingsPart] = text.split('Suggested Feelings:', 2);
     
     const reflection = reflectionPart.replace('Reflection:', '').trim();
     const suggestedFeelings = feelingsPart 
-      ? feelingsPart.split(',').map(f => f.trim()).filter(Boolean) 
+      ? feelingsPart.split(',').map(f => f.trim()).filter(Boolean).slice(0, 2) // Enforce max 2 in code as well
       : undefined;
 
     return { reflection, suggestedFeelings };

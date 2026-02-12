@@ -16,13 +16,14 @@ export async function callFlow<Input, Output>(flowName: string, input: Input): P
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(input),
+      // Genkit's on-demand API expects input wrapped in a 'data' field
+      body: JSON.stringify({ data: input }),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      console.error(`Genkit flow [${flowName}] failed:`, data);
+      console.error(`Genkit flow [${flowName}] failed:`, JSON.stringify(data, null, 2));
       return { error: { message: data.message || "Unknown Genkit error", code: data.code || "GENKIT_ERROR" } };
     }
 
