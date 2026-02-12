@@ -8,7 +8,7 @@ export * from './non-blocking-updates';
 export * from './errors';
 export * from './error-emitter';
 
-// Re-export specific hooks for clarity and easier imports
+// Explicitly re-export for clarity and build tool mapping
 export { 
   useMemoFirebase, 
   useAuth, 

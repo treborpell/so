@@ -46,12 +46,14 @@ export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { user } = useUser()
-  const auth = useAuth()
+  const { auth } = useAuth()
   const { setOpenMobile, isMobile } = useSidebar()
 
   const handleSignOut = async () => {
-    await signOut(auth)
-    router.push("/login")
+    if (auth) {
+      await signOut(auth)
+      router.push("/login")
+    }
   }
 
   const handleLinkClick = () => {
