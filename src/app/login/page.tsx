@@ -1,13 +1,13 @@
 
 "use client";
 
-import { useAuth } from "@/providers/auth-provider";
+import { useAuth } from "@/firebase/provider";
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
-export default function LoginPage() {
-  const { user, loading, signInWithGoogle } = useAuth();
+function LoginContent() {
+  const { user, loading, loginWithGoogle } = useAuth();
   const router = useRouter();
   const [isRedirecting, setIsRedirecting] = useState(false);
 
@@ -20,7 +20,7 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     setIsRedirecting(true);
     try {
-      await signInWithGoogle();
+      await loginWithGoogle();
     } catch (error: any) {
       alert("Redirection failed: " + error.message);
       setIsRedirecting(false);
@@ -46,4 +46,18 @@ export default function LoginPage() {
       </Button>
     </div>
   );
+}
+
+export default function LoginPage() {
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  if (!hasMounted) {
+    return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>;
+  }
+
+  return <LoginContent />;
 }

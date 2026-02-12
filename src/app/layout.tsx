@@ -2,8 +2,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/providers/auth-provider";
-import { Toaster } from "@/components/ui/toaster";
+import { ClientWrapper } from "@/components/ClientWrapper";
+import { Suspense } from "react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,10 +20,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <AuthProvider>
-          {children}
-          <Toaster />
-        </AuthProvider>
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-black">Mindful...</div>}>
+          <ClientWrapper>
+            {children}
+          </ClientWrapper>
+        </Suspense>
       </body>
     </html>
   );

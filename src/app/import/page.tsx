@@ -3,21 +3,19 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { AppSidebar } from "@/components/layout/AppSidebar"
-import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Loader2, RefreshCw, CheckCircle2, Trash2, FileSpreadsheet } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useFirestore, useUser } from "@/firebase/provider"
+import { useAuth } from "@/firebase/provider"
 import { addDoc, collection, getDocs, updateDoc, doc, query, where, limit, writeBatch } from "firebase/firestore"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 
 export default function ImportPage() {
-  const { user, isUserLoading: authLoading } = useUser()
-  const db = useFirestore()
+  const { user, db, loading: authLoading } = useAuth()
   const { toast } = useToast()
   const router = useRouter()
   
@@ -185,95 +183,92 @@ export default function ImportPage() {
   }
 
   if (authLoading || !user) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return <div className="h-full flex items-center justify-center">Loading...</div>;
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50/50">
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b bg-white px-6 sticky top-0 z-10 shadow-sm">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger />
-            <h2 className="text-xl font-bold">Data Management</h2>
+    <div className="flex flex-col min-h-full">
+      <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b bg-white px-6 sticky top-0 z-10 shadow-sm">
+        <div className="flex items-center gap-2">
+          <SidebarTrigger />
+          <h2 className="text-xl font-bold">Data Management</h2>
+        </div>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" size="sm" className="rounded-xl h-10 px-4 font-bold">
+              <Trash2 className="h-4 w-4 mr-2" /> Erase All Data
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="rounded-[2rem]">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Wipe everything?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete ALL entries in your ledger. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive hover:bg-destructive/90 rounded-xl">
+                Yes, Erase Everything
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </header>
+
+      <main className="p-6 max-w-5xl mx-auto w-full">
+        <div className="space-y-8">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
+              <FileSpreadsheet className="h-8 w-8 text-primary" /> 
+              Sync Your Spreadsheet
+            </h1>
+            <p className="text-muted-foreground">Paste your Excel or Sheets data below. We'll handle the rest.</p>
           </div>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm" className="rounded-xl h-10 px-4 font-bold">
-                <Trash2 className="h-4 w-4 mr-2" /> Erase All Data
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent className="rounded-[2rem]">
-              <AlertDialogHeader>
-                <AlertDialogTitle>Wipe everything?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete ALL entries in your ledger. This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive hover:bg-destructive/90 rounded-xl">
-                  Yes, Erase Everything
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </header>
 
-        <main className="p-6 max-w-5xl mx-auto w-full">
-          <div className="space-y-8">
-            <div className="space-y-2">
-              <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
-                <FileSpreadsheet className="h-8 w-8 text-primary" /> 
-                Sync Your Spreadsheet
-              </h1>
-              <p className="text-muted-foreground">Paste your Excel or Sheets data below. We'll handle the rest.</p>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card className="border-none shadow-sm bg-white">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2"><RefreshCw className="h-5 w-5 text-primary" />Format Fixer</CardTitle>
-                  <CardDescription>Standardize dates for perfect sorting.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button variant="outline" className="w-full h-12 rounded-xl font-bold" onClick={handleMigration} disabled={isMigrating}>
-                    {isMigrating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Fix Existing Dates"}
-                  </Button>
-                </CardContent>
-              </Card>
-              <Card className="border-none shadow-sm bg-emerald-50/50">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-500" />Smart Sync</CardTitle>
-                  <CardDescription>Pasting data for existing weeks will update the rows instead of duplicating them.</CardDescription>
-                </CardHeader>
-              </Card>
-            </div>
-
-            <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white border-t-8 border-primary">
-              <CardContent className="p-8 space-y-6">
-                <div className="space-y-2">
-                  <Label className="text-xs font-black uppercase text-slate-400">Excel Data Paste Area</Label>
-                  <Textarea 
-                    placeholder="Paste rows here (Include headers: WK, DATE, Cost, Paid, Check #, Pres, Topic, Notes...)" 
-                    className="min-h-[400px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs p-6 shadow-inner focus-visible:ring-primary"
-                    value={pasteContent}
-                    onChange={(e) => setPasteContent(e.target.value)}
-                    disabled={isUploading}
-                  />
-                </div>
-                <Button className="w-full h-16 rounded-2xl font-black text-xl shadow-lg shadow-primary/20" disabled={!pasteContent || isUploading} onClick={handleProcessImport}>
-                  {isUploading ? (
-                    <><Loader2 className="mr-3 h-6 w-6 animate-spin" /> {importStatus.mode} {importStatus.current}/{importStatus.total}</>
-                  ) : (
-                    "Sync Pasted Data"
-                  )}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card className="border-none shadow-sm bg-white">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2"><RefreshCw className="h-5 w-5 text-primary" />Format Fixer</CardTitle>
+                <CardDescription>Standardize dates for perfect sorting.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button variant="outline" className="w-full h-12 rounded-xl font-bold" onClick={handleMigration} disabled={isMigrating}>
+                  {isMigrating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Fix Existing Dates"}
                 </Button>
               </CardContent>
             </Card>
+            <Card className="border-none shadow-sm bg-emerald-50/50">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-500" />Smart Sync</CardTitle>
+                <CardDescription>Pasting data for existing weeks will update the rows instead of duplicating them.</CardDescription>
+              </CardHeader>
+            </Card>
           </div>
-        </main>
-      </SidebarInset>
+
+          <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white border-t-8 border-primary">
+            <CardContent className="p-8 space-y-6">
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase text-slate-400">Excel Data Paste Area</Label>
+                <Textarea 
+                  placeholder="Paste rows here (Include headers: WK, DATE, Cost, Paid, Check #, Pres, Topic, Notes...)" 
+                  className="min-h-[400px] rounded-2xl bg-slate-50 border-slate-100 font-mono text-xs p-6 shadow-inner focus-visible:ring-primary"
+                  value={pasteContent}
+                  onChange={(e) => setPasteContent(e.target.value)}
+                  disabled={isUploading}
+                />
+              </div>
+              <Button className="w-full h-16 rounded-2xl font-black text-xl shadow-lg shadow-primary/20" disabled={!pasteContent || isUploading} onClick={handleProcessImport}>
+                {isUploading ? (
+                  <><Loader2 className="mr-3 h-6 w-6 animate-spin" /> {importStatus.mode} {importStatus.current}/{importStatus.total}</>
+                ) : (
+                  "Sync Pasted Data"
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
     </div>
   )
 }
