@@ -13,7 +13,9 @@ import {
   Upload,
   Settings,
   BookOpen,
-  ShieldCheck
+  ShieldCheck,
+  Users,
+  PhoneCall
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -38,6 +40,8 @@ const mainNav = [
   { name: "Daily Journal", href: "/journal", icon: BookOpen },
   { name: "Polygraphs", href: "/polygraphs", icon: ShieldCheck },
   { name: "SO Program Log", href: "/sessions", icon: ClipboardList },
+  { name: "Pro-Social Log", href: "/social", icon: Users },
+  { name: "PO Interactions", href: "/po", icon: PhoneCall },
   { name: "Assignments", href: "/assignments", icon: CheckSquare },
 ]
 

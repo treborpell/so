@@ -9,17 +9,35 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Sparkles, Loader2, ClipboardList, PlusCircle, CheckCircle2, Wallet, Presentation, History } from "lucide-react"
+import { Sparkles, Loader2, ClipboardList, PlusCircle, CheckCircle2, Wallet, Presentation, History, Edit2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { summarizeSession } from "@/ai/flows/summarize-session"
 import { useToast } from "@/hooks/use-toast"
-import { addDoc, collection, query, orderBy, limit, doc, getDoc } from "firebase/firestore"
+import { addDoc, collection, query, orderBy, limit, doc, getDoc, setDoc, updateDoc, deleteDoc } from "firebase/firestore"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCollection, useMemoFirebase } from "@/firebase"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/firebase/provider"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { AlertTriangle, Trash2 } from 'lucide-react';
+
+interface SessionEntry {
+  id?: string;
+  week: string;
+  sessionNumber: string;
+  date: string;
+  cost: string;
+  paidAmount: string;
+  checkNumber: string;
+  ableToPresent: boolean;
+  presentationTopic: string;
+  notes: string;
+  aiInsight?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export default function SOProgramLogPage() {
   const { user, db, loading: authLoading } = useAuth()
@@ -31,9 +49,10 @@ export default function SOProgramLogPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [aiInsight, setAiInsight] = useState<any>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   // Automation State
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<SessionEntry>({
     week: "",
     sessionNumber: "",
     date: new Date().toISOString().split('T')[0],
@@ -68,7 +87,7 @@ export default function SOProgramLogPage() {
   // AUTOMATION LOGIC: Pre-fill form based on history and settings
   useEffect(() => {
     async function automateForm() {
-      if (!user || !db || !recentEntries) return;
+      if (!user || !db || !recentEntries || recentEntries.length === 0 || editingId) return; // Don't automate if editing
 
       // 1. Fetch user preferences
       const prefRef = doc(db, "users", user.uid, "config", "preferences");
@@ -78,12 +97,21 @@ export default function SOProgramLogPage() {
       // 2. Get latest entry info
       const latest = recentEntries[0];
       
-      if (latest) {
+      if (latest && latest.date) { // Ensure latest and its date property exist
+        const lastDate = new Date(latest.date);
+        if (isNaN(lastDate.getTime())) { // Check if the date is valid
+          console.error("Invalid date from latest entry:", latest.date);
+          setFormData(prev => ({
+            ...prev,
+            date: new Date().toISOString().split('T')[0],
+          }));
+          return; 
+        }
+
         const nextWeek = (Number(latest.week) + 1).toString();
         const nextSession = (Number(latest.sessionNumber) + 1).toString();
         
         // Calculate next date (target day of the week)
-        const lastDate = new Date(latest.date);
         const targetDay = Number(prefs.preferredDay); // 0-6
         const nextDate = new Date(lastDate);
         nextDate.setDate(lastDate.getDate() + 7); // Increment by exactly one week
@@ -99,16 +127,16 @@ export default function SOProgramLogPage() {
           cost: prefs.defaultCost,
           date: nextDate.toISOString().split('T')[0]
         }));
-      } else {
-        // Fallback for first entry
-        setFormData(prev => ({ ...prev, cost: prefs.defaultCost }));
+      } else if (!latest && recentEntries.length === 0) {
+        // Fallback for first entry if no history
+        setFormData(prev => ({ ...prev, cost: prefs.defaultCost, date: new Date().toISOString().split('T')[0] }));
       }
     }
 
     if (activeTab === "new-entry" && !loadingEntries) {
       automateForm();
     }
-  }, [user, db, recentEntries, activeTab, loadingEntries]);
+  }, [user, db, recentEntries, activeTab, loadingEntries, editingId]);
 
   if (authLoading || !user) {
     return <div className="h-full flex items-center justify-center">Loading...</div>;
@@ -120,6 +148,43 @@ export default function SOProgramLogPage() {
   }), { cost: 0, paid: 0 }) || { cost: 0, paid: 0 };
 
   const balance = totals.paid - totals.cost;
+
+  const resetForm = () => {
+    setFormData({
+      week: "",
+      sessionNumber: "",
+      date: new Date().toISOString().split('T')[0],
+      cost: "68.25",
+      paidAmount: "0",
+      checkNumber: "",
+      ableToPresent: false,
+      presentationTopic: "",
+      notes: ""
+    });
+    setAiInsight(null);
+    setEditingId(null);
+  };
+
+  const handleEdit = (entry: SessionEntry) => {
+    setFormData({
+      ...entry,
+      cost: entry.cost.toString(), // Ensure cost is string for input
+      paidAmount: entry.paidAmount.toString(), // Ensure paidAmount is string
+    });
+    setAiInsight({ summary: entry.aiInsight || "" }); // Pre-fill AI insight if exists
+    setEditingId(entry.id || null);
+    handleTabChange("new-entry");
+  };
+
+  const handleDeleteEntry = async (id: string, entryDate: string) => {
+    if (!user || !db) return;
+    try {
+      await deleteDoc(doc(db, "users", user.uid, "so_entries", id));
+      toast({ title: "Entry Deleted", description: `Session on ${entryDate} removed.` });
+    } catch (error: any) {
+      toast({ title: "Delete Failed", description: error.message, variant: "destructive" });
+    }
+  };
 
   const handleGetInsight = async () => {
     if (!formData.notes.trim()) {
@@ -142,16 +207,32 @@ export default function SOProgramLogPage() {
     if (!user || !db) return;
     setIsSaving(true)
     try {
-      await addDoc(collection(db, "users", user.uid, "so_entries"), {
-        ...formData,
+      const logDataToSave = {
         week: Number(formData.week),
+        sessionNumber: Number(formData.sessionNumber),
+        date: formData.date,
         cost: Number(formData.cost),
         paidAmount: Number(formData.paidAmount),
-        createdAt: new Date().toISOString(),
-        aiInsight: aiInsight?.summary || ""
-      })
-      toast({ title: "Entry Saved" })
-      setAiInsight(null)
+        checkNumber: formData.checkNumber,
+        ableToPresent: formData.ableToPresent,
+        presentationTopic: formData.presentationTopic,
+        notes: formData.notes,
+        aiInsight: aiInsight?.summary || "",
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (editingId) {
+        await updateDoc(doc(db, "users", user.uid, "so_entries", editingId), logDataToSave);
+        toast({ title: "Entry Updated", description: "Session log record updated." });
+      } else {
+        await addDoc(collection(db, "users", user.uid, "so_entries"), {
+          ...logDataToSave,
+          createdAt: new Date().toISOString(),
+        });
+        toast({ title: "Entry Saved", description: "New session log entry saved." });
+      }
+      
+      resetForm();
       handleTabChange("history")
     } catch (error) {
       toast({ title: "Error", variant: "destructive" })
@@ -174,7 +255,8 @@ export default function SOProgramLogPage() {
           <div className="mb-6 flex justify-center sm:justify-start">
             <TabsList className="bg-slate-100 rounded-full h-12 p-1 w-full sm:w-auto">
               <TabsTrigger value="new-entry" className="rounded-full text-xs font-bold px-8 flex-1 sm:flex-none">
-                <PlusCircle className="h-4 w-4 mr-2" /> New Entry
+                {editingId ? <Edit2 className="h-4 w-4 mr-2" /> : <PlusCircle className="h-4 w-4 mr-2" />} 
+                {editingId ? 'Edit Entry' : 'New Entry'}
               </TabsTrigger>
               <TabsTrigger value="history" className="rounded-full text-xs font-bold px-8 flex-1 sm:flex-none">
                 <History className="h-4 w-4 mr-2" /> Program History
@@ -185,7 +267,7 @@ export default function SOProgramLogPage() {
           <TabsContent value="new-entry" className="mt-0 space-y-8">
             <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white">
               <CardHeader className="bg-primary text-primary-foreground p-10">
-                <CardTitle className="text-3xl font-black flex items-center gap-3"><ClipboardList className="h-8 w-8" /> Session Log</CardTitle>
+                <CardTitle className="text-3xl font-black flex items-center gap-3"><ClipboardList className="h-8 w-8" /> {editingId ? 'Edit Session Log' : 'New Session Log'}</CardTitle>
               </CardHeader>
               <CardContent className="p-10 space-y-10">
                 <div className="grid gap-6 md:grid-cols-3">
@@ -240,8 +322,11 @@ export default function SOProgramLogPage() {
                   <Button variant="outline" className="flex-1 h-16 rounded-2xl text-lg font-black" onClick={handleGetInsight} disabled={isSummarizing}>
                     {isSummarizing ? <Loader2 className="h-5 w-5 animate-spin mr-3" /> : <Sparkles className="h-5 w-5 mr-3 text-amber-500" />} Get AI Insight
                   </Button>
+                  {editingId !== null && (
+                    <Button variant="outline" onClick={resetForm} className="h-16 rounded-2xl text-lg font-black">Cancel</Button>
+                  )}
                   <Button className="flex-1 h-16 rounded-2xl text-lg font-black shadow-xl" onClick={handleSaveLog} disabled={isSaving}>
-                    {isSaving ? <Loader2 className="h-5 w-5 animate-spin mr-3" /> : <CheckCircle2 className="h-5 w-5 mr-3" />} Save Log Entry
+                    {isSaving ? <Loader2 className="h-5 w-5 animate-spin mr-3" /> : <CheckCircle2 className="h-5 w-5 mr-3" />} {(editingId !== null) ? 'Update Log Entry' : 'Save Log Entry'}
                   </Button>
                 </div>
               </CardContent>
@@ -282,11 +367,15 @@ export default function SOProgramLogPage() {
                     <TableHead className="font-bold text-[10px] uppercase text-center">Pres.</TableHead>
                     <TableHead className="font-bold text-[10px] uppercase">Topic / Details</TableHead>
                     <TableHead className="font-bold text-[10px] uppercase">Notes</TableHead>
+                    <TableHead className="w-24 text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentEntries?.map((entry: any) => (
-                    <TableRow key={entry.id} className="group hover:bg-slate-50/50">
+                  {recentEntries?.map((entry: SessionEntry) => (
+                    <TableRow 
+                      key={entry.id} 
+                      className="group hover:bg-slate-50/50 cursor-pointer"
+                    >
                       <TableCell className="font-black text-primary">WK {entry.week}</TableCell>
                       <TableCell className="text-xs text-muted-foreground font-bold">{entry.sessionNumber}</TableCell>
                       <TableCell className="text-xs font-mono font-bold">{entry.date}</TableCell>
@@ -297,11 +386,42 @@ export default function SOProgramLogPage() {
                       </TableCell>
                       <TableCell className="text-xs font-bold truncate max-w-[150px]">{entry.presentationTopic}</TableCell>
                       <TableCell className="text-[10px] text-muted-foreground truncate max-w-[200px]">{entry.notes}</TableCell>
+                      <TableCell className="text-center">
+                         <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(entry)} className="h-8 w-8 rounded-lg text-slate-400 hover:text-primary hover:bg-primary/5">
+                               <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <AlertDialog>
+                               <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/5">
+                                     <Trash2 className="h-4 w-4" />
+                                  </Button>
+                               </AlertDialogTrigger>
+                               <AlertDialogContent className="rounded-[2rem]">
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle className="flex items-center gap-2">
+                                      <AlertTriangle className="h-5 w-5 text-destructive" />
+                                      Confirm Deletion
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will permanently remove the session record for Week <span className="font-bold text-slate-900">{entry.week}</span>, Session #<span className="font-bold text-slate-900">{entry.sessionNumber}</span> on <span className="font-bold text-slate-900">{entry.date}</span>. This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteEntry(entry.id!, entry.date)} className="bg-destructive hover:bg-destructive/90 rounded-xl">
+                                      Delete Record
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                               </AlertDialogContent>
+                            </AlertDialog>
+                         </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {(!recentEntries || recentEntries.length === 0) && !loadingEntries && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-20 text-muted-foreground italic">
+                      <TableCell colSpan={9} className="text-center py-20 text-muted-foreground italic">
                         No history found. Click "New Entry" or use the Import tool.
                       </TableCell>
                     </TableRow>
