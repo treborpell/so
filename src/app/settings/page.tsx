@@ -22,13 +22,16 @@ export default function SettingsPage() {
   const [preferences, setPreferences] = useState({ 
     reminderFrequency: 'daily', 
     deliveryTime: '20:00',
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone 
+    timezone: 'UTC' // Default to UTC for server-side match
   });
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [notificationStatus, setNotificationStatus] = useState('default');
 
   useEffect(() => {
+    // Detect timezone on client-side ONLY to avoid hydration mismatch
+    const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    
     async function fetchPreferences() {
       if (user) {
         const prefDocRef = doc(db, "users", user.uid, "config", "preferences");
@@ -38,8 +41,11 @@ export default function SettingsPage() {
           setPreferences({
             reminderFrequency: data.reminderFrequency || 'daily',
             deliveryTime: data.deliveryTime || '20:00',
-            timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+            timezone: data.timezone || detectedTimezone
           });
+        } else {
+          // If no preferences yet, just update the timezone from detection
+          setPreferences(prev => ({ ...prev, timezone: detectedTimezone }));
         }
         setIsLoading(false);
       }
@@ -114,7 +120,10 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Notification Settings</CardTitle>
-            <CardDescription>Manage how you receive reminders. We'll use your local timezone ({preferences.timezone}).</CardDescription>
+            <CardDescription>
+              Manage how you receive reminders. 
+              {preferences.timezone !== 'UTC' && ` We'll use your local timezone (${preferences.timezone}).`}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
               <div className="space-y-2">
