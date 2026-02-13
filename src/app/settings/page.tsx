@@ -22,14 +22,13 @@ export default function SettingsPage() {
   const [preferences, setPreferences] = useState({ 
     reminderFrequency: 'daily', 
     deliveryTime: '20:00',
-    timezone: 'UTC' // Default to UTC for server-side match
+    timezone: 'UTC' 
   });
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [notificationStatus, setNotificationStatus] = useState('default');
 
   useEffect(() => {
-    // Detect timezone on client-side ONLY to avoid hydration mismatch
     const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     
     async function fetchPreferences() {
@@ -44,7 +43,6 @@ export default function SettingsPage() {
             timezone: data.timezone || detectedTimezone
           });
         } else {
-          // If no preferences yet, just update the timezone from detection
           setPreferences(prev => ({ ...prev, timezone: detectedTimezone }));
         }
         setIsLoading(false);
@@ -73,42 +71,58 @@ export default function SettingsPage() {
   };
 
   const handleEnableNotifications = async () => {
-    if (!('Notification' in window) || !('serviceWorker' in navigator) || !VAPID_KEY) {
-      toast({ title: "Unsupported", description: "Push notifications are not supported on this browser.", variant: "destructive" });
+    // Debugging info
+    const hasNotification = 'Notification' in window;
+    const hasSW = 'serviceWorker' in navigator;
+    
+    console.log('Push Support Check:', { hasNotification, hasSW, hasVapid: !!VAPID_KEY });
+
+    if (!hasNotification || !hasSW) {
+      toast({ 
+        title: "Unsupported", 
+        description: "Your browser doesn't support push notifications. If you're on iPhone, you must 'Add to Home Screen' first.", 
+        variant: "destructive" 
+      });
       return;
     }
 
-    if (Notification.permission === 'granted') {
-      toast({ title: "Already Enabled", description: "Push notifications are already enabled." });
+    if (!VAPID_KEY) {
+      toast({ title: "Configuration Error", description: "VAPID key is missing. Please contact support.", variant: "destructive" });
       return;
     }
 
     if (Notification.permission === 'denied') {
-        toast({ title: "Permission Denied", description: "You have previously denied notification permissions. Please enable them in your browser settings.", variant: "destructive" });
+        toast({ title: "Permission Denied", description: "Please enable notifications in your browser settings for this site.", variant: "destructive" });
         return;
     }
 
     try {
+      // iOS requires a user gesture for this, which we have (button click)
       const permission = await Notification.requestPermission();
       setNotificationStatus(permission);
 
       if (permission === 'granted') {
+        // Register the service worker explicitly to ensure it's ready
+        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        console.log('Service Worker registered:', registration);
+
         const messaging = getMessaging();
-        const fcmToken = await getToken(messaging, { vapidKey: VAPID_KEY });
+        const fcmToken = await getToken(messaging, { 
+          vapidKey: VAPID_KEY,
+          serviceWorkerRegistration: registration
+        });
 
         if (fcmToken && user) {
           const tokenDocRef = doc(db, "users", user.uid, "config", "fcm");
           await setDoc(tokenDocRef, { token: fcmToken, createdAt: new Date().toISOString() }, { merge: true });
-          toast({ title: "Success!", description: "Push notifications have been enabled for this device." });
+          toast({ title: "Success!", description: "Push notifications enabled." });
         } else {
           throw new Error("Could not retrieve FCM token.");
         }
-      } else {
-          toast({ title: "Permission Not Granted", description: "You did not grant permission for notifications.", variant: "destructive" });
       }
     } catch (error) {
       console.error('Error enabling notifications:', error);
-      toast({ title: "Error", description: "Failed to enable push notifications.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to enable notifications. Try refreshing.", variant: "destructive" });
     }
   };
 
@@ -150,8 +164,6 @@ export default function SettingsPage() {
               </Button>
           </CardContent>
         </Card>
-
-        {/* Other settings cards would go here */}
 
         <div className="flex justify-end">
           <Button onClick={handleSaveChanges} disabled={isSaving || isLoading}>
