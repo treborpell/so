@@ -4,7 +4,7 @@
 import { useAuth } from "@/firebase/provider";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, Wallet, Plus, AlertCircle, History, CheckCircle2, BrainCircuit, ArrowRight, ShieldCheck, Users } from "lucide-react";
+import { BookOpen, Wallet, Plus, History, BrainCircuit, ArrowRight, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useCollection, useMemoFirebase } from "@/firebase";
@@ -14,7 +14,7 @@ import { SyllabusProgressCard } from "@/components/SyllabusProgressCard";
 import { ComplianceOverviewCard } from "@/components/ComplianceOverviewCard";
 
 export default function RootPage() {
-  const { user, db, loading, logout } = useAuth();
+  const { user, db, loading } = useAuth();
   
   const entriesQuery = useMemoFirebase(() => !db || !user ? null : query(collection(db, "users", user.uid, "so_entries"), orderBy("date", "desc")), [db, user]);
   const polygraphQuery = useMemoFirebase(() => !db || !user ? null : query(collection(db, "users", user.uid, "polygraphs"), orderBy("date", "desc")), [db, user]);
@@ -23,6 +23,27 @@ export default function RootPage() {
   const { data: logs } = useCollection(entriesQuery);
   const { data: polygraphs } = useCollection(polygraphQuery);
   const { data: socialLogs } = useCollection(socialQuery);
+
+  // Calculate totals and balance
+  const totals = logs?.reduce((acc, log) => ({ 
+    cost: acc.cost + (Number(log.cost) || 0), 
+    paid: acc.paid + (Number(log.paidAmount) || 0) 
+  }), { cost: 0, paid: 0 }) || { cost: 0, paid: 0 };
+  const totalBalance = totals.paid - totals.cost;
+
+  // Calculate running balance for each log
+  const logsWithRunningBalance = useMemoFirebase(() => {
+    if (!logs) return [];
+    let runningBalance = totalBalance;
+    return logs.map(log => {
+      const logBalance = runningBalance;
+      const cost = Number(log.cost) || 0;
+      const paid = Number(log.paidAmount) || 0;
+      runningBalance -= (paid - cost);
+      return { ...log, runningBalance: logBalance };
+    });
+  }, [logs, totalBalance]);
+
 
   if (loading) {
     return <div className="h-full flex items-center justify-center font-black animate-pulse">Mindful...</div>;
@@ -49,14 +70,11 @@ export default function RootPage() {
     );
   }
 
-  const totals = logs?.reduce((acc, log) => ({ cost: acc.cost + (Number(log.cost) || 0), paid: acc.paid + (Number(log.paidAmount) || 0) }), { cost: 0, paid: 0 }) || { cost: 0, paid: 0 };
-  const balance = totals.paid - totals.cost;
-
   const stats = [
-    { name: "Financial Ledger", value: balance === 0 ? "$0.00" : (balance > 0 ? `+$${balance.toFixed(2)}` : `-$${Math.abs(balance).toFixed(2)}`), icon: Wallet, color: balance < 0 ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600" },
-    { name: "Logged Sessions", value: logs?.length || "0", icon: BookOpen, color: "bg-purple-50 text-purple-600" },
-    { name: "Polygraphs Taken", value: polygraphs?.length || "0", icon: ShieldCheck, color: "bg-blue-50 text-blue-600" },
-    { name: "Pro-Social Events", value: socialLogs?.length || "0", icon: Users, color: "bg-amber-50 text-amber-600" },
+    { name: "Financial Ledger", value: totalBalance === 0 ? "$0.00" : (totalBalance > 0 ? `+$${totalBalance.toFixed(2)}` : `-$${Math.abs(totalBalance).toFixed(2)}`), icon: Wallet, color: totalBalance < 0 ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600", href: "/sessions?tab=history" },
+    { name: "Logged Sessions", value: logs?.length || "0", icon: BookOpen, color: "bg-purple-50 text-purple-600", href: "/sessions?tab=history" },
+    { name: "Polygraphs Taken", value: polygraphs?.length || "0", icon: ShieldCheck, color: "bg-blue-50 text-blue-600", href: "/polygraphs?tab=history" },
+    { name: "Pro-Social Events", value: socialLogs?.length || "0", icon: Users, color: "bg-amber-50 text-amber-600", href: "/social?tab=history" },
   ];
 
   return (
@@ -72,12 +90,14 @@ export default function RootPage() {
       <main className="p-8 space-y-8 max-w-7xl mx-auto w-full">
         <div className="grid gap-6 grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => (
-            <Card key={stat.name} className="border-none shadow-sm rounded-3xl overflow-hidden">
-              <CardContent className="p-6">
-                <div className={`p-3 rounded-2xl w-fit ${stat.color} mb-4`}><stat.icon className="h-6 w-6" /></div>
-                <div className="space-y-1"><p className="text-[10px] uppercase font-black text-slate-400 tracking-widest">{stat.name}</p><h3 className="text-2xl font-black">{stat.value}</h3></div>
-              </CardContent>
-            </Card>
+            <Link key={stat.name} href={stat.href}>
+                <Card className="border-none shadow-sm rounded-3xl overflow-hidden hover:scale-105 transition-transform">
+                <CardContent className="p-6">
+                    <div className={`p-3 rounded-2xl w-fit ${stat.color} mb-4`}><stat.icon className="h-6 w-6" /></div>
+                    <div className="space-y-1"><p className="text-[10px] uppercase font-black text-slate-400 tracking-widest">{stat.name}</p><h3 className="text-2xl font-black">{stat.value}</h3></div>
+                </CardContent>
+                </Card>
+            </Link>
           ))}
         </div>
 
@@ -89,7 +109,17 @@ export default function RootPage() {
                     <CardHeader className="p-8 pb-0 flex flex-row items-center justify-between"><div><CardTitle className="text-xl font-black">Recent Activity</CardTitle><CardDescription className="font-medium">Your latest program milestones.</CardDescription></div><Button asChild variant="ghost" className="h-10 rounded-xl font-bold text-primary"><Link href="/sessions?tab=history">View Ledger</Link></Button></CardHeader>
                     <CardContent className="p-8">
                         <div className="space-y-4">
-                            {logs?.slice(0, 4).map((log: any) => (<div key={log.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors border border-slate-100"><div className="space-y-1"><p className="text-sm font-black">WK {log.week}: {log.presentationTopic || 'General Session'}</p><p className="text-[10px] font-bold text-slate-400 uppercase">{log.date}</p></div><Badge className={`rounded-full px-3 py-1 font-black text-[9px] ${Number(log.paidAmount) >= Number(log.cost) ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-red-100 text-red-700 hover:bg-red-100'}`}>{Number(log.paidAmount) >= Number(log.cost) ? 'PAID' : 'DUE'}</Badge></div>))}
+                            {logsWithRunningBalance?.slice(0, 4).map((log: any) => (
+                                <div key={log.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors border border-slate-100">
+                                    <div className="space-y-1">
+                                        <p className="text-sm font-black">WK {log.week}: {log.presentationTopic || 'General Session'}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">{log.date}</p>
+                                    </div>
+                                    <Badge className={`rounded-full px-3 py-1 font-black text-[9px] ${log.runningBalance > 0 ? 'bg-emerald-100 text-emerald-700' : log.runningBalance < 0 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>
+                                        {log.runningBalance > 0 ? `+` : ''}${log.runningBalance.toFixed(2)}
+                                    </Badge>
+                                </div>
+                            ))}
                             {(!logs || logs.length === 0) && (<div className="text-center py-12 text-slate-400 font-bold italic border-2 border-dashed rounded-3xl">No sessions logged yet.</div>)}
                         </div>
                     </CardContent>

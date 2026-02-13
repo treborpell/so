@@ -65,7 +65,7 @@ export default function SOProgramLogPage() {
   })
 
   const { assignments, isLoading: assignmentsLoading } = useSyllabusAssignments();
-  const unpresentedAssignments = useMemo(() => assignments.filter(a => !a.isPresented), [assignments]);
+  const availableAssignments = useMemo(() => assignments.filter(a => !a.isCompleted), [assignments]);
 
   useEffect(() => { if (!authLoading && !user) router.push("/login") }, [user, authLoading, router])
 
@@ -280,8 +280,8 @@ export default function SOProgramLogPage() {
                   <div className="space-y-4">
                      <Popover open={openAssignmentSelector} onOpenChange={setOpenAssignmentSelector}>
                         <PopoverTrigger asChild><Button variant="outline" role="combobox" aria-expanded={openAssignmentSelector} className="w-full justify-between h-14 rounded-2xl bg-slate-50 font-bold text-slate-500"><span className="truncate">{formData.presentationTopic || "Select assignment or type a topic..."}</span><ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /></Button></PopoverTrigger>
-                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0"><Command filter={(value, search) => value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0}><CommandInput placeholder="Search assignment or type..." value={formData.presentationTopic} onValueChange={(search) => setFormData({...formData, presentationTopic: search, assignmentId: null, markAsCompleted: false})} /><CommandEmpty>No unpresented assignments found.</CommandEmpty><CommandGroup>
-                          {unpresentedAssignments.map((assignment) => (<CommandItem key={assignment.id} onSelect={() => {setFormData({...formData, presentationTopic: assignment.name, assignmentId: assignment.id}); setOpenAssignmentSelector(false);}}>{assignment.name}</CommandItem>))}
+                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0"><Command filter={(value, search) => value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0}><CommandInput placeholder="Search assignment or type..." value={formData.presentationTopic} onValueChange={(search) => setFormData({...formData, presentationTopic: search, assignmentId: null, markAsCompleted: false})} /><CommandEmpty>No uncompleted assignments found.</CommandEmpty><CommandGroup>
+                          {availableAssignments.map((assignment) => (<CommandItem key={assignment.id} onSelect={() => {setFormData({...formData, presentationTopic: assignment.name, assignmentId: assignment.id}); setOpenAssignmentSelector(false);}}>{assignment.name}</CommandItem>))}
                         </CommandGroup></Command></PopoverContent>
                       </Popover>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

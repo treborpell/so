@@ -1,11 +1,11 @@
+
 'use client'
 import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { useSyllabusProgress, ProgressData } from '@/hooks/useSyllabusProgress'
 import { Progress } from '@/components/ui/progress'
-import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { CheckCircle, Book, ArrowRight, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 const PhaseProgress: React.FC<{ phase: ProgressData }> = ({ phase }) => (
   <div className="space-y-2">
@@ -39,32 +39,27 @@ export const SyllabusProgressCard = () => {
   }
 
   return (
-    <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden">
-      <CardHeader className="p-8 pb-4">
-        <CardTitle className="text-xl font-black">Syllabus Progress</CardTitle>
-        <CardDescription>Your assignment completion status.</CardDescription>
-      </CardHeader>
-      <CardContent className="p-8 pt-4 space-y-6">
-        
-        <div className="text-center space-y-2 py-4">
-            <div className="text-5xl font-black text-primary">{Math.round(overallProgress.progress)}%</div>
-            <p className="font-bold text-slate-500">Overall Completion ({overallProgress.completed}/{overallProgress.total})</p>
-        </div>
+    <Link href="/assignments" className="block hover:scale-105 transition-transform">
+        <Card className="border-none shadow-2xl rounded-[2.5rem] bg-white overflow-hidden h-full">
+        <CardHeader className="p-8 pb-4">
+            <CardTitle className="text-xl font-black">Syllabus Progress</CardTitle>
+            <CardDescription>Your assignment completion status.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-8 pt-4 space-y-6">
+            
+            <div className="text-center space-y-2 py-4">
+                <div className="text-5xl font-black text-primary">{Math.round(overallProgress.progress)}%</div>
+                <p className="font-bold text-slate-500">Overall Completion ({overallProgress.completed}/{overallProgress.total})</p>
+            </div>
 
-        <div className="space-y-4">
-            {phasesWithProgress.map((phase, index) => (
-                <PhaseProgress key={index} phase={phase} />
-            ))}
-        </div>
+            <div className="space-y-4">
+                {phasesWithProgress.map((phase, index) => (
+                    <PhaseProgress key={index} phase={phase} />
+                ))}
+            </div>
 
-        <Button asChild className="w-full rounded-xl h-12 font-bold mt-4">
-            <Link href="/assignments">
-                <ArrowRight className="h-4 w-4 mr-2"/>
-                Go to Assignments
-            </Link>
-        </Button>
-
-      </CardContent>
-    </Card>
+        </CardContent>
+        </Card>
+    </Link>
   )
 }
