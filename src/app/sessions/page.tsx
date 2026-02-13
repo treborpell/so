@@ -13,10 +13,10 @@ import { Sparkles, Loader2, ClipboardList, PlusCircle, CheckCircle2, Wallet, Pre
 import { Badge } from "@/components/ui/badge"
 import { summarizeSession } from "@/ai/flows/summarize-session"
 import { useToast } from "@/hooks/use-toast"
-import { addDoc, collection, query, orderBy, doc, getDoc, setDoc, updateDoc, deleteDoc } from "firebase/firestore"
+import { addDoc, collection, query, orderBy, doc, getDoc, setDoc, updateDoc, deleteDoc, limit } from "firebase/firestore"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useCollection, useMemoFirebase } from "@/firebase"
+import { useCollection, useMemoFirebase, usePaginatedCollection } from "@/firebase"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/firebase/provider"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -24,6 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useSyllabusAssignments } from "@/hooks/useSyllabusAssignments"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { InfiniteScrollTrigger } from "@/components/infinite-scroll/InfiniteScrollTrigger"
 
 interface SessionEntry {
   id?: string;
@@ -76,19 +77,28 @@ export default function SOProgramLogPage() {
     router.replace(`/sessions?${params.toString()}`)
   }
 
+  // Base query for history
   const entriesQuery = useMemoFirebase(() => !db || !user ? null : query(collection(db, "users", user.uid, "so_entries"), orderBy("date", "desc")), [db, user]);
-  const { data: recentEntries, isLoading: loadingEntries } = useCollection(entriesQuery);
+  const { data: historyEntries, isLoading: loadingHistory, loadMore, hasMore } = usePaginatedCollection<SessionEntry>(entriesQuery, 15);
+
+  // Dedicated query for automation (latest only)
+  const latestEntryQuery = useMemoFirebase(() => !db || !user ? null : query(collection(db, "users", user.uid, "so_entries"), orderBy("date", "desc"), limit(1)), [db, user]);
+  const { data: latestEntries } = useCollection<SessionEntry>(latestEntryQuery);
+
+  // Global totals (still needed for ledger cards)
+  const allEntriesQuery = useMemoFirebase(() => !db || !user ? null : query(collection(db, "users", user.uid, "so_entries")), [db, user]);
+  const { data: allEntries } = useCollection<SessionEntry>(allEntriesQuery);
 
   // Effect for initial form automation
   useEffect(() => {
     async function automateForm() {
-      if (!user || !db || recentEntries === undefined || editingId) return;
+      if (!user || !db || latestEntries === undefined || editingId) return;
 
       const prefRef = doc(db, "users", user.uid, "config", "preferences");
       const prefSnap = await getDoc(prefRef);
       const prefs = prefSnap.exists() ? prefSnap.data() : { defaultCost: "68.25", preferredDay: "2" };
 
-      const latest = recentEntries?.[0];
+      const latest = latestEntries?.[0];
 
       let nextDate: Date;
       let nextWeek: string;
@@ -130,10 +140,10 @@ export default function SOProgramLogPage() {
       }));
     }
 
-    if (activeTab === "new-entry" && !loadingEntries) {
+    if (activeTab === "new-entry" && latestEntries !== null) {
       automateForm();
     }
-  }, [user, db, recentEntries, activeTab, loadingEntries, editingId]);
+  }, [user, db, latestEntries, activeTab, editingId]);
 
   // Effect for recalculating payment when date changes
   useEffect(() => {
@@ -144,8 +154,6 @@ export default function SOProgramLogPage() {
       const prefSnap = await getDoc(prefRef);
       const prefs = prefSnap.exists() ? prefSnap.data() : { defaultCost: "68.25", preferredDay: "2" };
 
-      // JS date parsing from string can be tricky with timezones. 
-      // Adding T00:00:00 makes it explicit to the local timezone.
       const entryDate = new Date(formData.date + 'T00:00:00');
       
       let newPaidAmount = "0";
@@ -180,9 +188,9 @@ export default function SOProgramLogPage() {
   }, [formData.date, editingId, user, db]);
 
 
-  if (authLoading || !user) return <div className="h-full flex items-center justify-center">Loading...</div>;
+  if (authLoading || !user) return <div className="h-full flex items-center justify-center font-black">Mindful...</div>;
 
-  const totals = recentEntries?.reduce((acc, log) => ({ cost: acc.cost + (Number(log.cost) || 0), paid: acc.paid + (Number(log.paidAmount) || 0) }), { cost: 0, paid: 0 }) || { cost: 0, paid: 0 };
+  const totals = allEntries?.reduce((acc, log) => ({ cost: acc.cost + (Number(log.cost) || 0), paid: acc.paid + (Number(log.paidAmount) || 0) }), { cost: 0, paid: 0 }) || { cost: 0, paid: 0 };
   const balance = totals.paid - totals.cost;
 
   const resetForm = () => {
@@ -300,7 +308,7 @@ export default function SOProgramLogPage() {
 
             {/* --- Mobile History View --- */}
             <div className="md:hidden space-y-4">
-              {recentEntries?.map((entry: SessionEntry) => (
+              {historyEntries?.map((entry: SessionEntry) => (
                 <Card key={entry.id} className="rounded-2xl shadow-lg border-none">
                   <CardContent className="p-4 space-y-3">
                     <div className="flex justify-between items-start">
@@ -324,14 +332,33 @@ export default function SOProgramLogPage() {
                   </CardContent>
                 </Card>
               ))}
-              {(!recentEntries || recentEntries.length === 0) && !loadingEntries && (<div className="text-center py-20 text-muted-foreground italic border-2 border-dashed rounded-3xl">No history found. Click "New Entry" or use the Import tool.</div>)}
+              <InfiniteScrollTrigger onIntersect={() => loadMore?.()} isLoading={loadingHistory} hasMore={!!hasMore} />
+              {(!historyEntries || historyEntries.length === 0) && !loadingHistory && (<div className="text-center py-20 text-muted-foreground italic border-2 border-dashed rounded-3xl">No history found. Click "New Entry" or use the Import tool.</div>)}
             </div>
 
             {/* --- Desktop History View --- */}
-            <Card className="hidden md:block border-none shadow-xl rounded-3xl bg-white overflow-hidden"><Table><TableHeader className="bg-slate-50"><TableRow><TableHead className="font-bold text-[10px] uppercase w-16">WK</TableHead><TableHead className="font-bold text-[10px] uppercase w-16">#</TableHead><TableHead className="font-bold text-[10px] uppercase">Date</TableHead><TableHead className="font-bold text-[10px] uppercase text-right">Cost</TableHead><TableHead className="font-bold text-[10px] uppercase text-right">Paid</TableHead><TableHead className="font-bold text-[10px] uppercase text-center">Pres.</TableHead><TableHead className="font-bold text-[10px] uppercase">Topic / Details</TableHead><TableHead className="font-bold text-[10px] uppercase">Notes</TableHead><TableHead className="w-24 text-center">Actions</TableHead></TableRow></TableHeader><TableBody>
-                  {recentEntries?.map((entry: SessionEntry) => (<TableRow key={entry.id} className="group hover:bg-slate-50/50 cursor-pointer"><TableCell className="font-black text-primary">WK {entry.week}</TableCell><TableCell className="text-xs text-muted-foreground font-bold">{entry.sessionNumber}</TableCell><TableCell className="text-xs font-mono font-bold">{entry.date}</TableCell><TableCell className="font-mono text-xs text-right">${Number(entry.cost).toFixed(2)}</TableCell><TableCell className="font-mono text-xs text-emerald-600 font-black text-right">${Number(entry.paidAmount || 0).toFixed(2)}</TableCell><TableCell className="text-center">{entry.ableToPresent ? <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" /> : <Separator className="w-4 h-[1px] mx-auto" />}</TableCell><TableCell className="text-xs font-bold truncate max-w-[150px]">{entry.presentationTopic}</TableCell><TableCell className="text-[10px] text-muted-foreground truncate max-w-[200px]">{entry.notes}</TableCell><TableCell className="text-center"><div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="ghost" size="icon" onClick={() => handleEdit(entry)} className="h-8 w-8 rounded-lg text-slate-400 hover:text-primary hover:bg-primary/5"><Edit2 className="h-4 w-4" /></Button><AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/5"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger><AlertDialogContent className="rounded-[2rem]"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive" />Confirm Deletion</AlertDialogTitle><AlertDialogDescription>This will permanently remove the session record for Week <span className="font-bold text-slate-900">{entry.week}</span>, Session #<span className="font-bold text-slate-900">{entry.sessionNumber}</span> on <span className="font-bold text-slate-900">{entry.date}</span>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteEntry(entry.id!, entry.date)} className="bg-destructive hover:bg-destructive/90 rounded-xl">Delete Record</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></div></TableCell></TableRow>))}
-                  {(!recentEntries || recentEntries.length === 0) && !loadingEntries && (<TableRow><TableCell colSpan={9} className="text-center py-20 text-muted-foreground italic">No history found. Click "New Entry" or use the Import tool.</TableCell></TableRow>)}
-            </TableBody></Table></Card>
+            <Card className="hidden md:block border-none shadow-xl rounded-3xl bg-white overflow-hidden">
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead className="font-bold text-[10px] uppercase w-16">WK</TableHead>
+                    <TableHead className="font-bold text-[10px] uppercase w-16">#</TableHead>
+                    <TableHead className="font-bold text-[10px] uppercase">Date</TableHead>
+                    <TableHead className="font-bold text-[10px] uppercase text-right">Cost</TableHead>
+                    <TableHead className="font-bold text-[10px] uppercase text-right">Paid</TableHead>
+                    <TableHead className="font-bold text-[10px] uppercase text-center">Pres.</TableHead>
+                    <TableHead className="font-bold text-[10px] uppercase">Topic / Details</TableHead>
+                    <TableHead className="font-bold text-[10px] uppercase">Notes</TableHead>
+                    <TableHead className="w-24 text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historyEntries?.map((entry: SessionEntry) => (<TableRow key={entry.id} className="group hover:bg-slate-50/50 cursor-pointer"><TableCell className="font-black text-primary">WK {entry.week}</TableCell><TableCell className="text-xs text-muted-foreground font-bold">{entry.sessionNumber}</TableCell><TableCell className="text-xs font-mono font-bold">{entry.date}</TableCell><TableCell className="font-mono text-xs text-right">${Number(entry.cost).toFixed(2)}</TableCell><TableCell className="font-mono text-xs text-emerald-600 font-black text-right">${Number(entry.paidAmount || 0).toFixed(2)}</TableCell><TableCell className="text-center">{entry.ableToPresent ? <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" /> : <Separator className="w-4 h-[1px] mx-auto" />}</TableCell><TableCell className="text-xs font-bold truncate max-w-[150px]">{entry.presentationTopic}</TableCell><TableCell className="text-[10px] text-muted-foreground truncate max-w-[200px]">{entry.notes}</TableCell><TableCell className="text-center"><div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="ghost" size="icon" onClick={() => handleEdit(entry)} className="h-8 w-8 rounded-lg text-slate-400 hover:text-primary hover:bg-primary/5"><Edit2 className="h-4 w-4" /></Button><AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/5"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger><AlertDialogContent className="rounded-[2rem]"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive" />Confirm Deletion</AlertDialogTitle><AlertDialogDescription>This will permanently remove the session record for Week <span className="font-bold text-slate-900">{entry.week}</span>, Session #<span className="font-bold text-slate-900">{entry.sessionNumber}</span> on <span className="font-bold text-slate-900">{entry.date}</span>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteEntry(entry.id!, entry.date)} className="bg-destructive hover:bg-destructive/90 rounded-xl">Delete Record</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></div></TableCell></TableRow>))}
+                  {(!historyEntries || historyEntries.length === 0) && !loadingHistory && (<TableRow><TableCell colSpan={9} className="text-center py-20 text-muted-foreground italic">No history found. Click "New Entry" or use the Import tool.</TableCell></TableRow>)}
+                </TableBody>
+              </Table>
+              <InfiniteScrollTrigger onIntersect={() => loadMore?.()} isLoading={loadingHistory} hasMore={!!hasMore} />
+            </Card>
           </TabsContent>
         </Tabs>
       </main>

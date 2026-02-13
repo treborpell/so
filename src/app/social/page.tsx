@@ -9,10 +9,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2, PlusCircle, CheckCircle2, History, Users, MapPin, Tag, Settings, Plus, X, Trash2, Upload, ChevronDown, Edit2, AlertTriangle, DollarSign } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { addDoc, collection, query, orderBy, doc, getDoc, setDoc, writeBatch, updateDoc, deleteDoc } from "firebase/firestore"
+import { addDoc, collection, query, orderBy, doc, getDoc, setDoc, writeBatch, updateDoc, deleteDoc, limit } from "firebase/firestore"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useCollection, useMemoFirebase } from "@/firebase"
+import { useCollection, useMemoFirebase, usePaginatedCollection } from "@/firebase"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/firebase/provider"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
 import { useMediaQuery } from "@/hooks/use-media-query"
+import { InfiniteScrollTrigger } from "@/components/infinite-scroll/InfiniteScrollTrigger"
 
 interface ProSocialActivity {
   id?: string; 
@@ -43,10 +44,9 @@ export default function ProSocialLogPage() {
 
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "history")
   const [isSaving, setIsSaving] = useState(false)
-  const [isSavingSettings, setIsSavingSettings] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [isImporting, setIsImporting] = useState(false)
   const [pasteContent, setPasteContent] = useState("")
-  const [editingId, setEditingId] = useState<string | null>(null)
 
   const [settings, setSettings] = useState({
     groupTypes: ["Family", "Friends", "Work Colleagues", "Community", "Support Group"],
@@ -77,12 +77,27 @@ export default function ProSocialLogPage() {
     router.replace(`/social?${params.toString()}`)
   }
 
+  // Paginated History Query
   const entriesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return query(collection(db, "users", user.uid, "pro_social_logs"), orderBy("date", "desc"));
   }, [db, user]);
   
-  const { data: recentEntries, isLoading: loadingEntries } = useCollection(entriesQuery);
+  const { data: historyEntries, isLoading: loadingHistory, loadMore, hasMore } = usePaginatedCollection<ProSocialActivity>(entriesQuery, 15);
+
+  // Dedicated query for automation (latest only)
+  const latestQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(collection(db, "users", user.uid, "pro_social_logs"), orderBy("date", "desc"), limit(1));
+  }, [db, user]);
+  const { data: latestEntries } = useCollection<ProSocialActivity>(latestQuery);
+
+  // Totals Query
+  const allEntriesQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(collection(db, "users", user.uid, "pro_social_logs"));
+  }, [db, user]);
+  const { data: allEntries } = useCollection<ProSocialActivity>(allEntriesQuery);
 
   useEffect(() => {
     async function loadSettings() {
@@ -103,8 +118,8 @@ export default function ProSocialLogPage() {
 
   useEffect(() => {
     async function automateForm() {
-      if (!user || !db || !recentEntries || recentEntries.length === 0 || editingId !== null) return;
-      const latest = recentEntries[0];
+      if (!user || !db || !latestEntries || latestEntries.length === 0 || editingId !== null) return;
+      const latest = latestEntries[0];
       if (latest && latest.date) { 
         const lastDate = new Date(latest.date);
         if (isNaN(lastDate.getTime())) { 
@@ -114,14 +129,12 @@ export default function ProSocialLogPage() {
         const nextDate = new Date(lastDate);
         nextDate.setDate(lastDate.getDate() + 7);
         setFormData(prev => ({ ...prev, date: nextDate.toISOString().split('T')[0], type: latest.type || "", activityType: latest.activityType || "" }));
-      } else if (!latest && recentEntries.length === 0) {
-        setFormData(prev => ({ ...prev, date: new Date().toISOString().split('T')[0], type: "", activityType: "" }));
       }
     }
-    if (activeTab === "new-entry" && !loadingEntries) {
+    if (activeTab === "new-entry" && latestEntries !== null) {
       automateForm();
     }
-  }, [user, db, recentEntries, activeTab, loadingEntries, editingId]);
+  }, [user, db, latestEntries, activeTab, editingId]);
 
   const saveSettingsToDb = async (newSettings: typeof settings) => {
     if (!user || !db) return;
@@ -204,10 +217,7 @@ export default function ProSocialLogPage() {
           dateStr = `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
         }
         const parsedDate = new Date(dateStr);
-        if (isNaN(parsedDate.getTime())) {
-          toast({ title: "Import Warning", description: `Skipped row with invalid date: ${row.substring(0, 50)}...`, variant: "destructive" });
-          return;
-        }
+        if (isNaN(parsedDate.getTime())) return;
         dateStr = parsedDate.toISOString().split('T')[0];
         const costStr = cols[1]?.replace('$', '').replace(',', '') || "0";
         const docRef = doc(collection(db, "users", user.uid, "pro_social_logs"));
@@ -219,7 +229,7 @@ export default function ProSocialLogPage() {
       setPasteContent("");
       handleTabChange("history");
     } catch (error: any) {
-      toast({ title: "Import Failed", description: "Check format and try again.", variant: "destructive" });
+      toast({ title: "Import Failed", variant: "destructive" });
     } finally {
       setIsImporting(false);
     }
@@ -239,21 +249,20 @@ export default function ProSocialLogPage() {
         newSettings.activityTypes.push(formData.activityType);
         settingsChanged = true;
       }
-      if (settingsChanged) {
-        await saveSettingsToDb(newSettings);
-      }
+      if (settingsChanged) await saveSettingsToDb(newSettings);
+      
       let dateToSave = formData.date;
       const parsedFormDataDate = new Date(formData.date);
-      if (isNaN(parsedFormDataDate.getTime())) {
-        dateToSave = new Date().toISOString().split('T')[0];
-      }
+      if (isNaN(parsedFormDataDate.getTime())) dateToSave = new Date().toISOString().split('T')[0];
+      
       const logDataToSave = { date: dateToSave, cost: Number(formData.cost), type: formData.type, activityType: formData.activityType, location: formData.location, participants: formData.participants, updatedAt: new Date().toISOString() };
+      
       if (editingId) {
         await updateDoc(doc(db, "users", user.uid, "pro_social_logs", editingId), logDataToSave);
-        toast({ title: "Activity Updated", description: "Pro-social activity record updated." });
+        toast({ title: "Activity Updated" });
       } else {
         await addDoc(collection(db, "users", user.uid, "pro_social_logs"), { ...logDataToSave, createdAt: new Date().toISOString() });
-        toast({ title: "Activity Logged", description: "Pro-social activity saved." });
+        toast({ title: "Activity Logged" });
       }
       resetForm();
       handleTabChange("history")
@@ -264,11 +273,9 @@ export default function ProSocialLogPage() {
     }
   }
 
-  if (authLoading || !user) {
-    return <div className="h-screen w-full flex items-center justify-center font-black">Syncing...</div>;
-  }
+  if (authLoading || !user) return <div className="h-screen w-full flex items-center justify-center font-black">Mindful...</div>;
 
-  const totalCost = recentEntries?.reduce((acc, log) => acc + (Number(log.cost) || 0), 0) || 0;
+  const totalCost = allEntries?.reduce((acc, log) => acc + (Number(log.cost) || 0), 0) || 0;
 
   return (
     <div className="flex flex-col min-h-screen bg-white">
@@ -324,14 +331,14 @@ export default function ProSocialLogPage() {
               <Card className="border-2 border-slate-100 shadow-2xl shadow-slate-500/10 rounded-[2.5rem] overflow-hidden">
                 <Table>
                   <TableHeader className="bg-slate-50/80"><TableRow className="border-b-2 border-slate-100"><TableHead className="font-bold text-[10px] uppercase w-28">Date</TableHead><TableHead className="font-bold text-[10px] uppercase w-24 text-right">Cost</TableHead><TableHead className="font-bold text-[10px] uppercase">Type</TableHead><TableHead className="font-bold text-[10px] uppercase">Activity</TableHead><TableHead className="font-bold text-[10px] uppercase">Location</TableHead><TableHead className="font-bold text-[10px] uppercase">Participants</TableHead><TableHead className="w-24 text-center">Actions</TableHead></TableRow></TableHeader>
-                  <TableBody>{recentEntries?.map((entry: ProSocialActivity) => (<TableRow key={entry.id} className="group hover:bg-slate-50/50"><TableCell className="font-mono font-bold text-indigo-600">{entry.date}</TableCell><TableCell className="font-mono text-right font-bold">${Number(entry.cost).toFixed(2)}</TableCell><TableCell><Badge variant="outline">{entry.type}</Badge></TableCell><TableCell className="text-slate-600">{entry.activityType}</TableCell><TableCell className="text-slate-600">{entry.location}</TableCell><TableCell className="text-muted-foreground italic">{entry.participants}</TableCell><TableCell className="text-center"><div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300"><Button variant="ghost" size="icon" onClick={() => handleEdit(entry)} className="h-8 w-8 rounded-lg"><Edit2 className="h-4 w-4" /></Button><AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:text-destructive"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger><AlertDialogContent className="rounded-[2rem]"><AlertDialogHeader><AlertDialogTitle>Confirm Deletion</AlertDialogTitle><AlertDialogDescription>This action will permanently delete the activity on <span className="font-bold">{entry.date}</span>.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteActivity(entry.id!, entry.date)} className="rounded-xl bg-destructive">Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></div></TableCell></TableRow>))}
-                  {(!recentEntries || recentEntries.length === 0) && !loadingEntries && (<TableRow><TableCell colSpan={7} className="text-center py-20 text-muted-foreground italic">No activities logged yet.</TableCell></TableRow>)}
+                  <TableBody>{historyEntries?.map((entry: ProSocialActivity) => (<TableRow key={entry.id} className="group hover:bg-slate-50/50"><TableCell className="font-mono font-bold text-indigo-600">{entry.date}</TableCell><TableCell className="font-mono text-right font-bold">${Number(entry.cost).toFixed(2)}</TableCell><TableCell><Badge variant="outline">{entry.type}</Badge></TableCell><TableCell className="text-slate-600">{entry.activityType}</TableCell><TableCell className="text-slate-600">{entry.location}</TableCell><TableCell className="text-muted-foreground italic">{entry.participants}</TableCell><TableCell className="text-center"><div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300"><Button variant="ghost" size="icon" onClick={() => handleEdit(entry)} className="h-8 w-8 rounded-lg"><Edit2 className="h-4 w-4" /></Button><AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:text-destructive"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger><AlertDialogContent className="rounded-[2rem]"><AlertDialogHeader><AlertDialogTitle>Confirm Deletion</AlertDialogTitle><AlertDialogDescription>This action will permanently delete the activity on <span className="font-bold">{entry.date}</span>.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteActivity(entry.id!, entry.date)} className="rounded-xl bg-destructive">Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></div></TableCell></TableRow>))}
                   </TableBody>
                 </Table>
+                <InfiniteScrollTrigger onIntersect={() => loadMore?.()} isLoading={loadingHistory} hasMore={!!hasMore} />
               </Card>
             ) : (
               <div className="space-y-4">
-                {recentEntries?.map((entry: ProSocialActivity) => (
+                {historyEntries?.map((entry: ProSocialActivity) => (
                   <Card key={entry.id} className="rounded-[2.5rem] shadow-2xl shadow-slate-500/10 border-2 border-slate-100 relative group">
                     <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(entry)} className="h-8 w-8 rounded-full text-slate-400 hover:text-primary hover:bg-primary/10">
@@ -371,7 +378,8 @@ export default function ProSocialLogPage() {
                     </CardContent>
                 </Card>
                 ))}
-                {(!recentEntries || recentEntries.length === 0) && !loadingEntries && (<p className="text-center py-10 text-slate-500 italic">No activities logged.</p>)}
+                <InfiniteScrollTrigger onIntersect={() => loadMore?.()} isLoading={loadingHistory} hasMore={!!hasMore} />
+                {(!historyEntries || historyEntries.length === 0) && !loadingHistory && (<p className="text-center py-10 text-slate-500 italic">No activities logged.</p>)}
               </div>
             )}
           </TabsContent>
