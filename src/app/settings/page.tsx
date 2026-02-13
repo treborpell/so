@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Bell, BellOff, Loader2 } from "lucide-react";
 
-const VAPID_KEY = process.env.NEXT_PUBLIC_VAPID_KEY;
+// Updated with correct key from screenshot
+const VAPID_KEY = "BJzkQb_VJIiN7YTSMnBHsz4izW74Td49ACy_1dYOMZ7f6OUjzyMpOS_McwX1xTDqbSnbr8ghOQ5FpuOltzt37bE";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -71,12 +72,9 @@ export default function SettingsPage() {
   };
 
   const handleEnableNotifications = async () => {
-    // Debugging info
     const hasNotification = 'Notification' in window;
     const hasSW = 'serviceWorker' in navigator;
     
-    console.log('Push Support Check:', { hasNotification, hasSW, hasVapid: !!VAPID_KEY });
-
     if (!hasNotification || !hasSW) {
       toast({ 
         title: "Unsupported", 
@@ -87,25 +85,21 @@ export default function SettingsPage() {
     }
 
     if (!VAPID_KEY) {
-      toast({ title: "Configuration Error", description: "VAPID key is missing. Please contact support.", variant: "destructive" });
+      toast({ title: "Configuration Error", description: "VAPID key is missing.", variant: "destructive" });
       return;
     }
 
     if (Notification.permission === 'denied') {
-        toast({ title: "Permission Denied", description: "Please enable notifications in your browser settings for this site.", variant: "destructive" });
+        toast({ title: "Permission Denied", description: "Please enable notifications in your browser settings.", variant: "destructive" });
         return;
     }
 
     try {
-      // iOS requires a user gesture for this, which we have (button click)
       const permission = await Notification.requestPermission();
       setNotificationStatus(permission);
 
       if (permission === 'granted') {
-        // Register the service worker explicitly to ensure it's ready
         const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-        console.log('Service Worker registered:', registration);
-
         const messaging = getMessaging();
         const fcmToken = await getToken(messaging, { 
           vapidKey: VAPID_KEY,
