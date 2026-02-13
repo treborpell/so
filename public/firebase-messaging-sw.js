@@ -1,21 +1,22 @@
 
 // Import and initialize the Firebase SDK
-import { initializeApp } from "firebase/app";
-import { getMessaging, onBackgroundMessage } from "firebase/messaging/sw";
+// Using the compat version for easier use in a static service worker file
+importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
 const firebaseConfig = {
   apiKey: "AIzaSyBGuwLV4yeuUVp9KzNTSIvYS8pL5K27wl0",
   authDomain: "studio-8298944904-e8e18.firebaseapp.com",
   projectId: "studio-8298944904-e8e18",
-  storageBucket: "studio-8298944904-e8e1s.firebasestorage.app",
+  storageBucket: "studio-8298944904-e8e18.firebasestorage.app",
   messagingSenderId: "717087876339",
   appId: "1:717087876339:web:bbcb268a50ea9151cf4386"
 };
 
-const firebaseApp = initializeApp(firebaseConfig);
-const messaging = getMessaging(firebaseApp);
+firebase.initializeApp(firebaseConfig);
+const messaging = firebase.messaging();
 
-onBackgroundMessage(messaging, (payload) => {
+messaging.onBackgroundMessage((payload) => {
   console.log("Received background message ", payload);
 
   const notificationTitle = payload.notification.title;
