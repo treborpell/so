@@ -3,9 +3,9 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/firebase/provider";
-import { doc, setDoc, getDoc } from "firebase/firestore";
-import { getMessaging, getToken } from "firebase/messaging";
-import { db } from "@/lib/firebase";
+import { doc, setDoc, getDoc, deleteDoc } from "firebase/firestore";
+import { getMessaging, getToken, deleteToken } from "firebase/messaging";
+import { db, app } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Bell, BellOff, Loader2 } from "lucide-react";
 
-// Updated with correct key from screenshot
-const VAPID_KEY = "BJzkQb_VJIiN7YTSMnBHsz4izW74Td49ACy_1dYOMZ7f6OUjzyMpOS_McwX1xTDqbSnbr8ghOQ5FpuOltzt37bE";
+// Updated with the newest key from your screenshot
+const VAPID_KEY = "BLX3Nmsix98pIIo14AxjUzBVUylrWHkF5QbZNBfaMfeeOM1BldCMm0el6GL-LVzrJgrZxEeNo5D7UeV-zx3Jmro";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -28,6 +28,7 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [notificationStatus, setNotificationStatus] = useState('default');
+  const [isProcessingPush, setIsProcessingPush] = useState(false);
 
   useEffect(() => {
     const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -71,6 +72,26 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDisableNotifications = async () => {
+    if (!user) return;
+    setIsProcessingPush(true);
+    try {
+      const messaging = getMessaging(app);
+      await deleteToken(messaging);
+      
+      const tokenDocRef = doc(db, "users", user.uid, "config", "fcm");
+      await deleteDoc(tokenDocRef);
+      
+      toast({ title: "Disabled", description: "You will no longer receive push notifications on this device." });
+      setNotificationStatus('default');
+    } catch (error) {
+      console.error('Error disabling notifications:', error);
+      toast({ title: "Error", description: "Failed to disable notifications properly.", variant: "destructive" });
+    } finally {
+      setIsProcessingPush(false);
+    }
+  };
+
   const handleEnableNotifications = async () => {
     const hasNotification = 'Notification' in window;
     const hasSW = 'serviceWorker' in navigator;
@@ -78,29 +99,20 @@ export default function SettingsPage() {
     if (!hasNotification || !hasSW) {
       toast({ 
         title: "Unsupported", 
-        description: "Your browser doesn't support push notifications. If you're on iPhone, you must 'Add to Home Screen' first.", 
+        description: "Your browser doesn't support push notifications.", 
         variant: "destructive" 
       });
       return;
     }
 
-    if (!VAPID_KEY) {
-      toast({ title: "Configuration Error", description: "VAPID key is missing.", variant: "destructive" });
-      return;
-    }
-
-    if (Notification.permission === 'denied') {
-        toast({ title: "Permission Denied", description: "Please enable notifications in your browser settings.", variant: "destructive" });
-        return;
-    }
-
+    setIsProcessingPush(true);
     try {
       const permission = await Notification.requestPermission();
       setNotificationStatus(permission);
 
       if (permission === 'granted') {
         const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-        const messaging = getMessaging();
+        const messaging = getMessaging(app);
         const fcmToken = await getToken(messaging, { 
           vapidKey: VAPID_KEY,
           serviceWorkerRegistration: registration
@@ -108,15 +120,30 @@ export default function SettingsPage() {
 
         if (fcmToken && user) {
           const tokenDocRef = doc(db, "users", user.uid, "config", "fcm");
-          await setDoc(tokenDocRef, { token: fcmToken, createdAt: new Date().toISOString() }, { merge: true });
+          await setDoc(tokenDocRef, { 
+            token: fcmToken, 
+            createdAt: new Date().toISOString(),
+            platform: 'web'
+          }, { merge: true });
+          
           toast({ title: "Success!", description: "Push notifications enabled." });
         } else {
           throw new Error("Could not retrieve FCM token.");
         }
+      } else {
+          toast({ title: "Permission Denied", description: "Please enable notifications in your browser settings.", variant: "destructive" });
       }
     } catch (error) {
       console.error('Error enabling notifications:', error);
-      toast({ title: "Error", description: "Failed to enable notifications. Try refreshing.", variant: "destructive" });
+      // Detailed error message to help debug authentication credential issues
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      toast({ 
+        title: "Error", 
+        description: `Failed to enable notifications: ${errorMessage.slice(0, 100)}...`, 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsProcessingPush(false);
     }
   };
 
@@ -152,10 +179,20 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
-              <Button onClick={handleEnableNotifications} disabled={notificationStatus === 'granted'}>
-                {notificationStatus === 'granted' ? <BellOff className="mr-2 h-4 w-4" /> : <Bell className="mr-2 h-4 w-4" />} 
-                {notificationStatus === 'granted' ? 'Push Notifications Enabled' : 'Enable Push Notifications'}
-              </Button>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                {notificationStatus === 'granted' ? (
+                  <Button variant="outline" className="flex-1" onClick={handleDisableNotifications} disabled={isProcessingPush}>
+                    {isProcessingPush ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BellOff className="mr-2 h-4 w-4" />}
+                    Disable Notifications
+                  </Button>
+                ) : (
+                  <Button className="flex-1" onClick={handleEnableNotifications} disabled={isProcessingPush}>
+                    {isProcessingPush ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
+                    Enable Push Notifications
+                  </Button>
+                )}
+              </div>
           </CardContent>
         </Card>
 
