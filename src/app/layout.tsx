@@ -20,8 +20,15 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
-    icon: "/brain-circuit.png",
-    apple: "/brain-circuit.png",
+    icon: [
+      { url: "/brain-circuit.png" },
+      { url: "/brain-circuit.png", sizes: "192x192", type: "image/png" },
+      { url: "/brain-circuit.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/brain-circuit.png" },
+      { url: "/brain-circuit.png", sizes: "180x180", type: "image/png" },
+    ],
   },
 };
 
@@ -40,6 +47,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        {/* Force mobile browsers to see this icon immediately */}
+        <link rel="icon" href="/brain-circuit.png" sizes="any" />
+        <link rel="apple-touch-icon" href="/brain-circuit.png" />
+      </head>
       <body className={inter.className}>
         <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-black">Mindful...</div>}>
           <ClientWrapper>
