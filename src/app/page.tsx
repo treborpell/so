@@ -4,7 +4,7 @@
 import { useAuth } from "@/firebase/provider";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, Wallet, Plus, History, BrainCircuit, ArrowRight, ShieldCheck, Users } from "lucide-react";
+import { BookOpen, Wallet, Plus, BrainCircuit, ArrowRight, ShieldCheck, Users, ScrollText, NotebookPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useCollection, useMemoFirebase } from "@/firebase";
@@ -82,8 +82,8 @@ export default function RootPage() {
       <header className="flex h-20 shrink-0 items-center justify-between gap-2 border-b bg-white/80 px-8 sticky top-0 z-40 backdrop-blur-xl">
         <div className="flex items-center gap-4"><SidebarTrigger className="h-10 w-10 rounded-xl" /><h2 className="text-2xl font-black tracking-tight">Dashboard</h2></div>
         <div className="flex items-center gap-3">
-          <Button asChild variant="outline" className="rounded-xl h-11 px-6 font-bold hidden sm:flex border-2"><Link href="/sessions?tab=history"><History className="h-4 w-4 mr-2" /> History</Link></Button>
-          <Button asChild className="rounded-xl shadow-lg h-11 px-6 font-black"><Link href="/sessions?tab=new-entry"><Plus className="h-5 w-5 mr-2" /> New Entry</Link></Button>
+          <Button asChild variant="outline" className="rounded-xl h-11 px-6 font-bold hidden sm:flex border-2 transition-all hover:bg-primary/5 hover:border-primary/20"><Link href="/journal"><NotebookPen className="h-4 w-4 mr-2" /> + Journal Entry</Link></Button>
+          <Button asChild className="rounded-xl shadow-lg h-11 px-6 font-black transition-all hover:scale-105"><Link href="/sessions?tab=new-entry"><ScrollText className="h-4 w-4 mr-2" /> + Program Log</Link></Button>
         </div>
       </header>
 

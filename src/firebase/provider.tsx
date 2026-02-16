@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode, useMemo, DependencyList } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useMemo, useCallback, DependencyList } from 'react';
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, User, Auth, signOut, indexedDBLocalPersistence, setPersistence } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
@@ -13,6 +13,7 @@ interface AuthContextType {
   db: Firestore;
   firebaseApp: FirebaseApp;
   logout: () => Promise<void>;
+  getIdToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,7 +40,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, [auth]);
 
-  const logout = () => signOut(auth);
+  const logout = useCallback(() => signOut(auth), [auth]);
+
+  const getIdToken = useCallback(async () => {
+    if (!user) {
+      return null;
+    }
+    return await user.getIdToken();
+  }, [user]);
 
   const value = useMemo(() => ({
     user,
@@ -47,8 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     auth,
     db,
     firebaseApp: app,
-    logout
-  }), [user, loading, auth, db, app]);
+    logout,
+    getIdToken
+  }), [user, loading, auth, db, app, logout, getIdToken]);
 
   return (
     <AuthContext.Provider value={value}>

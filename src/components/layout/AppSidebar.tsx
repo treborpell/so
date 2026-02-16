@@ -38,8 +38,8 @@ import { signOut } from "firebase/auth"
 const mainNav = [
   { name: "My Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Daily Journal", href: "/journal?tab=history", icon: BookOpen },
+  { name: "Program Log", href: "/sessions?tab=history", icon: ClipboardList },
   { name: "Polygraphs", href: "/polygraphs?tab=history", icon: ShieldCheck },
-  { name: "SO Program Log", href: "/sessions?tab=history", icon: ClipboardList },
   { name: "Pro-Social Log", href: "/social?tab=history", icon: Users },
   { name: "PO Interactions", href: "/po?tab=history", icon: PhoneCall },
   { name: "Assignments", href: "/assignments", icon: CheckSquare },

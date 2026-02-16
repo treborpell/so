@@ -3,3 +3,29 @@
 
 runConfig:
   maxInstances: 1
+
+# Public configuration variables. These are baked into the client bundle at build time.
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: "AIzaSyBGuwLV4yeuUVp9KzNTSIvYS8pL5K27wl0"
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: "studio-8298944904-e8e18.firebaseapp.com"
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: "studio-8298944904-e8e18"
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: "studio-8298944904-e8e18.firebasestorage.app"
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "717087876339"
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:717087876339:web:bbcb268a50ea9151cf4386"
+  - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    value: "AIzaSyDJ7ZABmbx_dXfQ_JcAhnXNk16KDubH_18"
+  - variable: NEXT_PUBLIC_VAPID_KEY
+    value: "AIzaSyC6GKtd8lmXPTkT0qZUsVmIQco-OAAheC4"
+  - variable: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+    value: "717087876339-h03lfkahr35ddcvb28bosvv2ip75pef5.apps.googleusercontent.com"
+
+# Sensitive keys that are kept secure in Google Cloud Secret Manager.
+secrets:
+  - variable: GOOGLE_API_KEY
+    secret: GOOGLE_API_KEY

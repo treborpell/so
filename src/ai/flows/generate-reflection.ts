@@ -18,9 +18,6 @@ export const generateReflection = ai.defineFlow(
     }),
   },
   async (input) => {
-    // Log the input for debugging
-    console.log('generateReflection input:', input);
-
     const context = [
       input.sThoughts ? `Self-defeating thoughts: ${input.sThoughts}` : '',
       input.sFantasies ? `Self-defeating fantasies: ${input.sFantasies}` : '',
@@ -43,16 +40,13 @@ export const generateReflection = ai.defineFlow(
       Suggested Feelings: [comma-separated list, max 2 items]
     `;
 
-    const { text } = await ai.generate({ 
-      prompt,
-      config: { temperature: 0.5 } // Lower temperature for more focused output
-    });
+    const { text } = await ai.generate(prompt);
 
     const [reflectionPart, feelingsPart] = text.split('Suggested Feelings:', 2);
     
     const reflection = reflectionPart.replace('Reflection:', '').trim();
     const suggestedFeelings = feelingsPart 
-      ? feelingsPart.split(',').map(f => f.trim()).filter(Boolean).slice(0, 2) // Enforce max 2 in code as well
+      ? feelingsPart.split(',').map(f => f.trim()).filter(Boolean).slice(0, 2)
       : undefined;
 
     return { reflection, suggestedFeelings };

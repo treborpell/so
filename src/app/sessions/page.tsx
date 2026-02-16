@@ -81,6 +81,18 @@ export default function SOProgramLogPage() {
   const entriesQuery = useMemoFirebase(() => !db || !user ? null : query(collection(db, "users", user.uid, "so_entries"), orderBy("date", "desc")), [db, user]);
   const { data: historyEntries, isLoading: loadingHistory, loadMore, hasMore } = usePaginatedCollection<SessionEntry>(entriesQuery, 15);
 
+  const uniqueHistoryEntries = useMemo(() => {
+    if (!historyEntries) return [];
+    const seenIds = new Set();
+    return historyEntries.filter(entry => {
+      if (!entry.id || seenIds.has(entry.id)) {
+        return false;
+      }
+      seenIds.add(entry.id);
+      return true;
+    });
+  }, [historyEntries]);
+
   // Dedicated query for automation (latest only)
   const latestEntryQuery = useMemoFirebase(() => !db || !user ? null : query(collection(db, "users", user.uid, "so_entries"), orderBy("date", "desc"), limit(1)), [db, user]);
   const { data: latestEntries } = useCollection<SessionEntry>(latestEntryQuery);
@@ -308,7 +320,7 @@ export default function SOProgramLogPage() {
 
             {/* --- Mobile History View --- */}
             <div className="md:hidden space-y-4">
-              {historyEntries?.map((entry: SessionEntry) => (
+              {uniqueHistoryEntries?.map((entry: SessionEntry) => (
                 <Card key={entry.id} className="rounded-2xl shadow-lg border-none">
                   <CardContent className="p-4 space-y-3">
                     <div className="flex justify-between items-start">
@@ -333,7 +345,7 @@ export default function SOProgramLogPage() {
                 </Card>
               ))}
               <InfiniteScrollTrigger onIntersect={() => loadMore?.()} isLoading={loadingHistory} hasMore={!!hasMore} />
-              {(!historyEntries || historyEntries.length === 0) && !loadingHistory && (<div className="text-center py-20 text-muted-foreground italic border-2 border-dashed rounded-3xl">No history found. Click "New Entry" or use the Import tool.</div>)}
+              {(!uniqueHistoryEntries || uniqueHistoryEntries.length === 0) && !loadingHistory && (<div className="text-center py-20 text-muted-foreground italic border-2 border-dashed rounded-3xl">No history found. Click "New Entry" or use the Import tool.</div>)}
             </div>
 
             {/* --- Desktop History View --- */}
@@ -353,8 +365,8 @@ export default function SOProgramLogPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {historyEntries?.map((entry: SessionEntry) => (<TableRow key={entry.id} className="group hover:bg-slate-50/50 cursor-pointer"><TableCell className="font-black text-primary">WK {entry.week}</TableCell><TableCell className="text-xs text-muted-foreground font-bold">{entry.sessionNumber}</TableCell><TableCell className="text-xs font-mono font-bold">{entry.date}</TableCell><TableCell className="font-mono text-xs text-right">${Number(entry.cost).toFixed(2)}</TableCell><TableCell className="font-mono text-xs text-emerald-600 font-black text-right">${Number(entry.paidAmount || 0).toFixed(2)}</TableCell><TableCell className="text-center">{entry.ableToPresent ? <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" /> : <Separator className="w-4 h-[1px] mx-auto" />}</TableCell><TableCell className="text-xs font-bold truncate max-w-[150px]">{entry.presentationTopic}</TableCell><TableCell className="text-[10px] text-muted-foreground truncate max-w-[200px]">{entry.notes}</TableCell><TableCell className="text-center"><div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="ghost" size="icon" onClick={() => handleEdit(entry)} className="h-8 w-8 rounded-lg text-slate-400 hover:text-primary hover:bg-primary/5"><Edit2 className="h-4 w-4" /></Button><AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/5"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger><AlertDialogContent className="rounded-[2rem]"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive" />Confirm Deletion</AlertDialogTitle><AlertDialogDescription>This will permanently remove the session record for Week <span className="font-bold text-slate-900">{entry.week}</span>, Session #<span className="font-bold text-slate-900">{entry.sessionNumber}</span> on <span className="font-bold text-slate-900">{entry.date}</span>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteEntry(entry.id!, entry.date)} className="bg-destructive hover:bg-destructive/90 rounded-xl">Delete Record</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></div></TableCell></TableRow>))}
-                  {(!historyEntries || historyEntries.length === 0) && !loadingHistory && (<TableRow><TableCell colSpan={9} className="text-center py-20 text-muted-foreground italic">No history found. Click "New Entry" or use the Import tool.</TableCell></TableRow>)}
+                  {uniqueHistoryEntries?.map((entry: SessionEntry) => (<TableRow key={entry.id} className="group hover:bg-slate-50/50 cursor-pointer"><TableCell className="font-black text-primary">WK {entry.week}</TableCell><TableCell className="text-xs text-muted-foreground font-bold">{entry.sessionNumber}</TableCell><TableCell className="text-xs font-mono font-bold">{entry.date}</TableCell><TableCell className="font-mono text-xs text-right">${Number(entry.cost).toFixed(2)}</TableCell><TableCell className="font-mono text-xs text-emerald-600 font-black text-right">${Number(entry.paidAmount || 0).toFixed(2)}</TableCell><TableCell className="text-center">{entry.ableToPresent ? <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" /> : <Separator className="w-4 h-[1px] mx-auto" />}</TableCell><TableCell className="text-xs font-bold truncate max-w-[150px]">{entry.presentationTopic}</TableCell><TableCell className="text-[10px] text-muted-foreground truncate max-w-[200px]">{entry.notes}</TableCell><TableCell className="text-center"><div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="ghost" size="icon" onClick={() => handleEdit(entry)} className="h-8 w-8 rounded-lg text-slate-400 hover:text-primary hover:bg-primary/5"><Edit2 className="h-4 w-4" /></Button><AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/5"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger><AlertDialogContent className="rounded-[2rem]"><AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive" />Confirm Deletion</AlertDialogTitle><AlertDialogDescription>This will permanently remove the session record for Week <span className="font-bold text-slate-900">{entry.week}</span>, Session #<span className="font-bold text-slate-900">{entry.sessionNumber}</span> on <span className="font-bold text-slate-900">{entry.date}</span>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteEntry(entry.id!, entry.date)} className="bg-destructive hover:bg-destructive/90 rounded-xl">Delete Record</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></div></TableCell></TableRow>))}
+                  {(!uniqueHistoryEntries || uniqueHistoryEntries.length === 0) && !loadingHistory && (<TableRow><TableCell colSpan={9} className="text-center py-20 text-muted-foreground italic">No history found. Click "New Entry" or use the Import tool.</TableCell></TableRow>)}
                 </TableBody>
               </Table>
               <InfiniteScrollTrigger onIntersect={() => loadMore?.()} isLoading={loadingHistory} hasMore={!!hasMore} />

@@ -12,8 +12,6 @@ export const extractFeelings = ai.defineFlow(
     }),
   },
   async (input) => {
-    console.log('extractFeelings input:', input);
-
     const prompt = `
       Analyze the following text and extract a concise list of up to 5 distinct feelings or emotions present or implied in the text. 
       Return only the comma-separated list of feelings. If no clear feelings are detected, return an empty string or an empty array.
@@ -23,10 +21,7 @@ export const extractFeelings = ai.defineFlow(
       Feelings:
     `;
 
-    const { text } = await ai.generate({ 
-      prompt,
-      config: { temperature: 0.2 } 
-    });
+    const { text } = await ai.generate(prompt);
 
     const feelings = text ? text.trim().split(',').map(f => f.trim()).filter(Boolean) : [];
 
