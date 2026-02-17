@@ -22,7 +22,8 @@ import {
   X,
   PlusCircle,
   BrainCircuit,
-  Heart
+  Heart,
+  Printer
 } from "lucide-react"
 import { useAuth } from "@/firebase/provider"
 import { doc, getDoc, setDoc, onSnapshot, updateDoc, arrayUnion } from "firebase/firestore"
@@ -276,6 +277,12 @@ export default function JournalPage() {
     }
   };
 
+  const handlePrint = () => {
+    if (!currentWeekStart) return;
+    const weekId = getLocalDateString(currentWeekStart);
+    window.open(`/journal/printable?weekId=${weekId}`, '_blank');
+  };
+
   const weekDates = useMemo(() => {
     if (!currentWeekStart) return [];
     return Array.from({ length: 7 }, (_, i) => {
@@ -325,6 +332,9 @@ export default function JournalPage() {
             <ChevronRight className="h-5 w-5" />
           </Button>
           <Separator orientation="vertical" className="h-6 mx-1" />
+           <Button variant="outline" size="icon" className="rounded-xl border-2" onClick={handlePrint}>
+            <Printer className="h-5 w-5" />
+          </Button>
           <Button onClick={saveWeek} disabled={isSaving} className="rounded-xl font-black shadow-lg shadow-primary/20 px-6">
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />} Save
           </Button>
