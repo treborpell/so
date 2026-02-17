@@ -20,7 +20,11 @@ function PrintableJournalContent() {
 
   useEffect(() => {
     if (weekId) {
-      setWeekStartDate(new Date(weekId));
+      // Manually parse the date string to avoid timezone issues.
+      // new Date('YYYY-MM-DD') is interpreted as UTC.
+      const parts = weekId.split('-').map(Number);
+      const localDate = new Date(parts[0], parts[1] - 1, parts[2]);
+      setWeekStartDate(localDate);
     }
   }, [weekId]);
 
@@ -33,13 +37,15 @@ function PrintableJournalContent() {
           setWeekData(docSnap.data());
         } else {
           console.log("No such document!");
+          setWeekData({}); // Treat as empty week
         }
       }
     }
     loadWeekData();
   }, [user, db, weekId]);
 
-  if (authLoading || !weekData) {
+  // Also check for weekStartDate to be loaded
+  if (authLoading || !weekData || !weekStartDate) {
     return <div className="h-full flex items-center justify-center font-black">Loading...</div>;
   }
   
@@ -50,6 +56,7 @@ function PrintableJournalContent() {
   });
   
   const getLocalDateString = (date: Date) => {
+    // This function correctly gets the YYYY-MM-DD for a local date object.
     const offset = date.getTimezoneOffset();
     const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
     return adjustedDate.toISOString().split('T')[0];
